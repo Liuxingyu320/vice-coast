@@ -1,0 +1,9 @@
+{
+  "name": "vice-coast",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "check:city": "node checks/run-city.mjs" },
+  "dependencies": { "three": "0.180.0" },
+  "devDependencies": { "esbuild": "0.25.12" }
+}

@@ -1,0 +1,12 @@
+/node_modules/
+/index.html
+/.checks/
+/sources/
+/AGENTS.md
+/*.mp4
+/开放世界方向调研.md
+.DS_Store
+.env
+.env.*
+*.blend[0-9]
+__pycache__/
