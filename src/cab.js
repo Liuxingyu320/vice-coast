@@ -10,7 +10,13 @@ export class CabShift {
   this.sign.add(new T.Mesh(new T.BoxGeometry(.92,.29,.42),[amber,amber,amber,amber,face,face]));this.sign.position.set(0,1.64,.05);
   this.hold=0;this.exit=null;this.impact=sim.impactSerial;
  }
- get target(){const f=this.save.cab;if(!f)return null;const pick=f.stage==='pickup',p=stops[pick?f.from:f.to];return {...p,label:(pick?'接客 · ':'送达 · ')+p.name,type:'cab'}}
+ get target(){
+  const f=this.save.cab;if(!f)return null;
+  const pick=f.stage==='pickup',id=pick?f.from:f.to;
+  if(this._target&&this._targetPick===pick&&this._targetId===id)return this._target;
+  const p=stops[id];this._targetPick=pick;this._targetId=id;
+  return this._target={...p,label:(pick?'接客 · ':'送达 · ')+p.name,type:'cab'};
+ }
  reset(){this.hold=0;this.exit=null;this.sign.removeFromParent();this.guest.visible=false;this.impact=this.sim.impactSerial}
  update(dt,keys,onBoard){
   const sim=this.sim,f=this.save.cab;

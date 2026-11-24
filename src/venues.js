@@ -118,7 +118,7 @@ export function createVenues(scene,colliders,footprints){
   b(left,8.86,-120,19,.46,49,cream);for(const zz of [-138,-131,-124,-117,-110,-103]){b(31.16,5.1,zz,.36,4.5,3.7,0x55657a);for(const y of [3.8,5.6])b(31.45,y,zz,.38,.14,4.2,cream)}
   for(const y of [7.45,7.77,8.10])lights.b(31.36,y,-120,.39,.13,48,0xff9c9d,0,0,0,true);
   lights.add(plane,31.42,6.85,-120,14,2.8,1,0xffffff,0,east,0,letterPanel('Flamingo','SOCIAL CLUB   /   LEONIDA SESSIONS','#5c394e','#ffd2bc'));
-  for(const [xx,zz,ww,dd] of [[50,back,36,.55],[42.25,-97,20.5,.55],[62.75,-97,10.5,.55],[67.7,-130,.5,26],[67.7,-103,.5,11]]){
+  for(const [xx,zz,ww,dd] of [[49,back,38,.55],[41.25,-97,22.5,.55],[62.75,-97,10.5,.55],[67.7,-130,.5,26],[67.7,-103,.5,11]]){
    wall(xx,.86,zz,ww,1.25,dd,0xc29488);b(xx,1.56,zz,ww+.12,.16,dd+.12,cream);
   }
   for(const z of [-117,-109]){wall(67.65,1.6,z,.78,2.8,.84,0x877781);lights.b(67.65,3.15,z,.86,.16,.92,0xfab5a9,0,0,0,true)}

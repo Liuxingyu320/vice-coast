@@ -98,7 +98,7 @@ export class MidnightDistrict{
  }
  update(dt,dialogue){
   const {s,set,sim,host}=this,p=sim.pos,t=host.clock;
-  sim.world.venues.setLoadingDoor(s.pass);sim.walkScale=s.stage==='haul'?.7:1;
+  sim.world.venues.setLoadingDoor(s.pass&&this.save.chapter.ending!=='keep');sim.walkScale=s.stage==='haul'?.7:1;
   set.amp.visible=['crew','haul'].includes(s.stage);set.pass.visible=s.stage==='card';set.bag.visible=s.bag==='looking';set.photo.visible=s.bag==='returned';
   set.crate.visible=['idle','carrying'].includes(s.vinyl);set.beacon.scale.setScalar(.91+.17*Math.sin(t*3));set.beacon.material.color.setHex(s.outcome==='live'?0x95edcf:0xff847d);
   const carry=(obj,side)=>{obj.rotation.y=p.a;const back=sim.inCar?(sim.carSpec.cargoBack??1.45):.09;obj.position.set(p.x+side*Math.cos(p.a)+back*Math.sin(p.a),sim.inCar?(sim.car.userData.model===2?2.48:sim.carSpec.cargoHeight??.99):.49,p.z-side*Math.sin(p.a)+back*Math.cos(p.a))};

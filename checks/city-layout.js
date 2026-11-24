@@ -5,14 +5,63 @@ import {makeMidnightSet} from '../src/midnight-set.js';
 import {Simulation} from '../src/simulation.js';
 import {additions, streetResidents} from '../src/street-catalog.js';
 import {createWorld} from '../src/world.js';
-import {checkVehicleCollision} from './vehicle-collision.js';
+import {checkRaceRivalRoutes, checkVehicleCollision} from './vehicle-collision.js';
+import {checkVehicleAudio} from './vehicle-audio.js';
+import {checkPedestrianCombat} from './pedestrian-combat.js';
+import {checkPursuit} from './pursuit-behavior.js';
 
 function check(ok, message) {
  if (!ok) throw new Error(message);
 }
 
+function checkVehicleExit(){
+ const fixture=(speed,blocked)=>{
+  const sim=Object.create(Simulation.prototype);
+  const car={position:{x:160,z:25},rotation:{y:0},visible:true,userData:{model:0}};
+  const notices=[];
+  Object.assign(sim,{inCar:true,speed,pos:{x:160,z:25,a:0},car,cars:[car],traffic:[],notices,notify:message=>notices.push(message)});
+  sim.blocked=blocked;
+  sim.clearScenerySegment=()=>true;
+  sim.placeOnFoot=(x,z,a)=>{sim.inCar=false;sim.speed=0;sim.pos={x,z,a}};
+  return sim;
+ };
+ for(const speed of [0,5,-5]){
+  const sim=fixture(speed,()=>false);
+  check(sim.canExitAtSpeed(),'HUD refuses an allowed exit speed '+speed);
+  sim.interact();
+  check(!sim.inCar&&sim.pos.x>160&&sim.car.position.x===160&&sim.car.position.z===25,'Allowed exit fails or moves the car '+speed);
+ }
+ for(const speed of [5.001,-5.001]){
+  const sim=fixture(speed,()=>false);
+  check(!sim.canExitAtSpeed(),'HUD permits exit beyond the speed limit '+speed);
+  sim.interact();
+  check(sim.inCar&&sim.speed===speed&&sim.notices.length===0,'Too-fast exit changes vehicle state or shows a warning '+speed);
+ }
+ const farDoor=fixture(5,x=>x>=160);
+ farDoor.interact();
+ check(!farDoor.inCar&&farDoor.pos.x<160,'Blocked curb-side door prevents a clear far-side exit');
+ const blocked=fixture(-5,()=>true);
+ blocked.interact();
+ check(blocked.inCar&&blocked.speed===-5&&blocked.notices[0]?.includes('车门'),'Blocked doors allow exit or omit the obstruction notice');
+}
+
+function checkVehicleOffense(){
+ const notices=[];
+ const sim=Object.assign(Object.create(Simulation.prototype),{heat:0,hits:0,hitCooldown:0,notify:message=>notices.push(message)});
+ sim.reportVehicleOffense();
+ check(sim.hits===1&&sim.hitCooldown>0&&notices.length===0,'First vehicle offense is ignored or shows a crash warning');
+ sim.hitCooldown=0;
+ sim.reportVehicleOffense();
+ check(sim.heat===1&&notices.length===1&&notices[0].includes('警戒上升'),'Repeated vehicle offense no longer raises wanted status');
+}
+
 async function checkCity() {
+ checkVehicleExit();
+ checkVehicleOffense();
  checkVehicleCollision(check);
+ checkPedestrianCombat(check);
+ checkPursuit(check);
+ await checkVehicleAudio(check);
  await loadStudio();
  const scene = new Scene();
  const world = createWorld(scene);
@@ -28,6 +77,7 @@ async function checkCity() {
  for (const {x,z,w,d} of world.colliders) {
   check(!onRoad(x,z,w,d), 'Collision inside road at '+[x,z]);
  }
+ checkRaceRivalRoutes(check,world.colliders);
  const transform = new Matrix4(), bounds = new Box3();
  scene.traverse(mesh => {
   if (!mesh.isInstancedMesh) return;
@@ -68,7 +118,7 @@ async function checkCity() {
  const moved = sim.parkedStreetCar(favorite.key).position;
  check(moved.z !== favorite.z && save.pin.x === moved.x && save.pin.z === moved.z, 'Car pin did not follow relocated vehicle');
  return [xs.length*zs.length+' intersections', world.colliders.length+' collision bounds',
-         sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations', 'vehicle collision regressions'].join(', ');
+         sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations', 'vehicle exit, collision, audio, combat and pursuit regressions'].join(', ');
 }
 
 const result = document.querySelector('#result');

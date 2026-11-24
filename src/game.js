@@ -11,6 +11,7 @@ import {Simulation,flattenTraffic} from './simulation.js';
 import {CoastAudio} from './sound.js';
 import {paintMap,clickedPoint} from './map.js';
 import {additions} from './street-catalog.js';
+import {Vector3} from 'three';
 import {editionKey,localStops,readEdition,loadSave,missions,tapes,paints,dist,district,districtEn,circuits,stops,guests,upgrades,curbPin,newFare,fareTerms,farePay} from './data.js';
 
 const $=id=>document.getElementById(id),icon=name=>'<svg aria-hidden="true"><use href="#i-'+name+'"/></svg>';
@@ -42,21 +43,42 @@ function resetControls(){
  }
  touchHolds.clear();
 }
+const patrolBuf=[];
 function visiblePatrols(){
- if(!sim?.heat)return [];
- return [sim.patrol,sim.patrol2].filter(car=>car?.visible).map(car=>car.position);
+ patrolBuf.length=0;
+ if(sim?.heat){if(sim.patrol?.visible)patrolBuf.push(sim.patrol.position);if(sim.patrol2?.visible)patrolBuf.push(sim.patrol2.position)}
+ return patrolBuf;
 }
+let pinCache=null;
 function target(){
  if(race?.active)return race.target;
- const pin=save.pin?{...save.pin,label:'导航 · '+save.pin.name,type:'pin'}:null;
  if(cab?.target)return cab.target;
- return chapter?.target??storyTarget()??pin;
+ const story=chapter?.target??storyTarget();
+ if(story)return story;
+ const pin=save.pin;if(!pin)return null;
+ if(!pinCache||pinCache.x!==pin.x||pinCache.z!==pin.z||pinCache.name!==pin.name||pinCache.vehicleKey!==pin.vehicleKey)pinCache={...pin,label:'导航 · '+pin.name,type:'pin'};
+ return pinCache;
 }
 function stopRace(){if(race?.active){race.stop();sim.raceClosed=false}}
 function bookmark(){sprintLock=false;if(save.mission>=0){save.bookmark={id:save.mission,step:missions[save.mission].time?0:save.step};save.mission=-1;save.step=0;timer=null}}
 function clearFare(){save.cab=null;cab?.reset()}
 function eventStart(){chapter?.suspend();drift.reset();rewardUntil=0;bookmark();closePanel();startedAt=elapsed}
-function startFare(){eventStart();stopRace();if(!save.cab){cab.reset();save.cab=save.heldCab??newFare(save,sim.pos,kind);save.heldCab=null;if(save.cab.stage==='ride'&&(!sim.inCar||sim.carId!==save.cab.car)){const car=sim.cars[save.cab.car];if(car){sim.carId=save.cab.car;sim.car=car;sim.inCar=true;sim.hero.visible=false;sim.pos={x:car.position.x,z:car.position.z,a:car.rotation.y};sim.speed=0;sim.motionA=sim.pos.a;sim.walkV.x=sim.walkV.z=0;sim.resetCamera()}}}sim.setNight(true);toast('夜班调度 · '+guests[save.cab.guest].name+' 等待接送');persist();updateHUD()}
+function startFare(){
+ eventStart();stopRace();
+ if(!save.cab){
+  cab.reset();save.cab=save.heldCab??newFare(save,sim.pos,kind);save.heldCab=null;
+  if(save.cab.stage==='ride'&&(!sim.inCar||sim.carId!==save.cab.car)){
+   const car=sim.cars[save.cab.car];
+   if(car){
+    if(sim.inCar)sim.resetVehicleMotion(sim.car);
+    sim.resetVehicleMotion(car);sim.carId=save.cab.car;sim.car=car;sim.inCar=true;sim.hero.visible=false;
+    sim.pos={x:car.position.x,z:car.position.z,a:car.rotation.y};sim.speed=0;sim.motionA=sim.pos.a;
+    sim.walkV.x=sim.walkV.z=0;sim.resetCamera();
+   }
+  }
+ }
+ sim.setNight(true);toast('夜班调度 · '+guests[save.cab.guest].name+' 等待接送');persist();updateHUD();
+}
 function startRace(){eventStart();clearFare();sim.setNight(true);sim.raceClosed=true;race.start(circuits[course],sim);audio.chime();toast('跟住薄荷绿旗门 · 对手车尾可补充氮气',4);persist();updateHUD()}
 function receipt(mode,title,amount,note,next){rewardMode=mode;rewardUntil=Infinity;audio.chime();$('toast').classList.remove('show');toastUntil=0;$('reward').firstElementChild.textContent=mode==='race'?'COAST MOTOR CLUB　/　比赛成绩':'COAST CABS　/　车费收据';$('rewardname').textContent=title;$('rewardcash').textContent='＋'+money(amount);$('rewardnote').textContent=note;$('rewardbalance').textContent='当前余额 '+money(save.money);$('nextjob').textContent=next;persist();updateHUD()}
 function podium(result){
@@ -108,7 +130,7 @@ function refreshMenu(){
  document.querySelectorAll('.sound').forEach(b=>{b.innerHTML=icon(save.sound?'audio':'off');b.setAttribute('aria-label',save.sound?'关闭声音':'打开声音');b.setAttribute('aria-pressed',String(save.sound))});
 }
 let photoYaw=-.75,photoHeight=2.6,photoRadius=6.3,dragPoint=null;
-let relay=0,sprintLock=false,lastCheck=null;
+let relay=0,sprintLock=false,lastCheck=null;const lastSample={x:0,z:0};
 function beginJob(id){
  const resume=save.bookmark?.id===id?save.bookmark.step:0;chapter?.suspend();relay=0;drift.reset();stopRace();clearFare();rewardMode='story';
  save.mission=id;save.bookmark=null;save.step=resume;timer=null;sprintLock=false;lastCheck=null;rewardUntil=0;audio.chime();toast(missions[id].from+'　“'+(id===0?'唱片店等你。粉色光圈就是取货点。':id===1?'先到海景大道集合，再开始计时。':'胶片在小哈瓦那，我在露台等你。')+'”',5);
@@ -180,47 +202,63 @@ function collect(){
  for(const [i,p] of tapes.entries()){if(save.tapes.includes(i)||dist(sim.pos,p)>2.85)continue;
   save.tapes.push(i);save.money+=100;sim.collectibles[i].visible=false;audio.chime();toast('录音带 '+save.tapes.length+'/6 · '+p.name+'　＋$100');persist()}
 }
+const textShown=new WeakMap(),hudPoint=new Vector3();
+const mapPose={x:null,z:null,a:null,tx:null,tz:null,type:'',tapes:'',heat:-1,passed:-1,race:0,p0x:null,p0z:null,p1x:null,p1z:null};
+let boostShown='',driftFill='';
+function write(node,value){if(!node||textShown.get(node)===value)return;textShown.set(node,value);node.textContent=value}
+function minimapDirty(p,step,patrols){
+ let raceKey=0,passed=-1;
+ if(race?.active){passed=race.passed;for(const v of race.cars)raceKey+=v.car.position.x+v.car.position.z}
+ const tx=step?step.x:null,tz=step?step.z:null,type=step?.type??'',tapes=save.tapes.join(',');
+ const p0=patrols[0],p1=patrols[1],p0x=p0?p0.x:null,p0z=p0?p0.z:null,p1x=p1?p1.x:null,p1z=p1?p1.z:null;
+ if(mapPose.x===p.x&&mapPose.z===p.z&&mapPose.a===p.a&&mapPose.tx===tx&&mapPose.tz===tz&&mapPose.type===type&&mapPose.tapes===tapes&&mapPose.heat===sim.heat&&mapPose.passed===passed&&mapPose.race===raceKey&&mapPose.p0x===p0x&&mapPose.p0z===p0z&&mapPose.p1x===p1x&&mapPose.p1z===p1z)return false;
+ Object.assign(mapPose,{x:p.x,z:p.z,a:p.a,tx,tz,type,tapes,heat:sim.heat,passed,race:raceKey,p0x,p0z,p1x,p1z});return true;
+}
 function updateHUD(){
  if(!sim)return;streetRadio?.hud();const p=sim.pos,job=missions[save.mission],step=target(),driving=sim.inCar;
- $('objtop').textContent=job?'ON AIR　/　'+job.name:'PALM CITY　/　自由漫游';
- $('objtext').textContent=step?.label??'查看城市委托';
- $('objdist').textContent=step?'◆ '+Math.round(dist(p,step))+' m　·　'+(save.step+1)+' / '+(job?.steps.length??1):'任务 '+save.done.length+'/3　·　录音带 '+save.tapes.length+'/6';
+ let top=job?'ON AIR　/　'+job.name:'PALM CITY　/　自由漫游';
+ let text=step?.label??'查看城市委托';
+ let distText=step?'◆ '+Math.round(dist(p,step))+' m　·　'+(save.step+1)+' / '+(job?.steps.length??1):'任务 '+save.done.length+'/3　·　录音带 '+save.tapes.length+'/6';
  if(race?.active){const rel=Math.atan2(p.x-step.x,p.z-step.z)-p.a;const behind=Math.cos(rel)<-.55&&dist(p,step)>12;
-  $('objtop').textContent='COAST MOTOR CLUB　/　'+race.spec.name;$('objtext').textContent='P'+race.rank+' / 4　·　第 '+race.lap+' / '+race.spec.laps+' 圈';$('objdist').textContent=(behind?'↶ 旗门在后方':race.draft?'尾流充能 ↑':'旗门 '+(race.passed%race.track.gates.length+1)+' / '+race.track.gates.length)+'　·　'+clock(race.time)}
- else if(save.cab){const f=save.cab;$('objtop').textContent='COAST CABS　/　'+guests[f.guest].name;$('objdist').textContent=Math.round(dist(p,step))+' m　·　'+(f.stage==='pickup'?'停车接客':'舒适 '+Math.round(f.comfort)+'%　小费 '+money(farePay(f).tip)+(f.kind==='express'?'　'+Math.max(0,Math.ceil(fareTerms(f).limit-f.seconds))+'s':''))}
- else if(step?.type==='pin'){$('objtop').textContent='PALM CITY　/　导航';$('objdist').textContent=Math.round(dist(p,step))+' m　·　自设路标'}
- const count=$('countin');count.hidden=!race?.active||(race.countdown<=0&&race.time>.8);if(!count.hidden)count.textContent=race.countdown>0?Math.ceil(race.countdown):'GO';
- const chip=$('driftScore');chip.hidden=drift.score<8;if(!chip.hidden){chip.querySelector('b').textContent=Math.floor(drift.score)+' PT';chip.querySelector('small').textContent='漂移 ×'+drift.multiplier.toFixed(1)+(drift.idle>.2?'　即将入账':'');chip.style.setProperty('--driftfill',(100-100*drift.idle/2.25)+'%')}
- $('hud').dataset.draft=String(!!race?.draft);$('hud').dataset.activity=race?.active?'race':save.cab?'cab':'city';
- if(save.chapter.active&&step?.type!=='pin'){$('objtop').textContent=replay?'REPLAY　/　后院回放':save.chapter.ending?'CHAPTER 02　/　午夜暗频':'CHAPTER 01　/　海浪账本';$('objtext').textContent=step?.label??(save.chapter.ending?'午夜暗频 · 已完结':'海浪账本 · 已完结');$('objdist').textContent=step?(sim.inCar?'驾车':'步行')+'　·　'+Math.round(dist(p,step))+' m':save.chapter.ending?chapter.town.journal:chapter.journal}
- if(sim.heat){const stars='★'.repeat(sim.heat)+(sim.raceClosed&&!sim.storyAlert?'　警戒暂缓':'　警戒中');if(race?.active)$('objdist').textContent+='　·　'+stars;else $('objtop').textContent=stars}
- const action=chapter?.nearby();shownSceneAction=action;$('sceneAction').hidden=!action;$('sceneAction').lastElementChild.textContent=action?chapter.prompt(action):'';
- $('radio').setAttribute('aria-pressed',String(save.radio));$('radiotxt').textContent=sim.airTrack?'LIVE 98.4':save.radio?(save.midnight.outcome?'FM 98.4':'FM 98.6'):'RADIO OFF';
- $('speed').textContent=String(Math.round(Math.abs(sim.speed)*3.6)).padStart(3,'0');
- $('gear').textContent=sim.speed<-.4?'R':sim.speed<.4?'N':String(Math.min(6,1+Math.floor(sim.speed/7)));
- $('boostbar').style.width=(sim.boost*100)+'%';$('vehicle').textContent=sim.carName();$('gauge').hidden=!driving;
- $('timer').hidden=timer===null;$('timer').textContent=timer===null?'':Math.max(0,timer).toFixed(1)+' s';$('timer').classList.toggle('urgent',timer!==null&&timer<=15);
+  top='COAST MOTOR CLUB　/　'+race.spec.name;text='P'+race.rank+' / 4　·　第 '+race.lap+' / '+race.spec.laps+' 圈';distText=(behind?'↶ 旗门在后方':race.draft?'尾流充能 ↑':'旗门 '+(race.passed%race.track.gates.length+1)+' / '+race.track.gates.length)+'　·　'+clock(race.time)}
+ else if(save.cab){const f=save.cab;top='COAST CABS　/　'+guests[f.guest].name;distText=Math.round(dist(p,step))+' m　·　'+(f.stage==='pickup'?'停车接客':'舒适 '+Math.round(f.comfort)+'%　小费 '+money(farePay(f).tip)+(f.kind==='express'?'　'+Math.max(0,Math.ceil(fareTerms(f).limit-f.seconds))+'s':''))}
+ else if(step?.type==='pin'){top='PALM CITY　/　导航';distText=Math.round(dist(p,step))+' m　·　自设路标'}
+ if(save.chapter.active&&step?.type!=='pin'){top=replay?'REPLAY　/　后院回放':save.chapter.ending?'CHAPTER 02　/　午夜暗频':'CHAPTER 01　/　海浪账本';text=step?.label??(save.chapter.ending?'午夜暗频 · 已完结':'海浪账本 · 已完结');distText=step?(sim.inCar?'驾车':'步行')+'　·　'+Math.round(dist(p,step))+' m':save.chapter.ending?chapter.town.journal:chapter.journal}
+ if(sim.heat){const hidden=sim.spotted&&sim.unseen&&!sim.storyAlert&&!sim.raceClosed;const mark=hidden&&Math.sin(sim.time*7)>0?'☆':'★';const stars=mark.repeat(sim.heat)+(sim.raceClosed&&!sim.storyAlert?'　警戒暂缓':'　警戒中');if(race?.active)distText+='　·　'+stars;else top=stars}
+ if(chapter.carryingMaster)distText+='　·　'+(driving?'母带箱已装车':'随身携带母带箱');
+ write($('objtop'),top);write($('objtext'),text);write($('objdist'),distText);
+ const count=$('countin');count.hidden=!race?.active||(race.countdown<=0&&race.time>.8);if(!count.hidden)write(count,race.countdown>0?Math.ceil(race.countdown):'GO');
+ const chip=$('driftScore');chip.hidden=drift.score<8;if(!chip.hidden){write(chip.querySelector('b'),Math.floor(drift.score)+' PT');write(chip.querySelector('small'),'漂移 ×'+drift.multiplier.toFixed(1)+(drift.idle>.2?'　即将入账':''));const fill=(100-100*drift.idle/2.25)+'%';if(driftFill!==fill){driftFill=fill;chip.style.setProperty('--driftfill',fill)}}
+ const hud=$('hud'),draft=String(!!race?.draft),activity=race?.active?'race':save.cab?'cab':'city';
+ if(hud.dataset.draft!==draft)hud.dataset.draft=draft;if(hud.dataset.activity!==activity)hud.dataset.activity=activity;
+ const action=chapter?.nearby();shownSceneAction=action;$('sceneAction').hidden=!action;write($('sceneAction').lastElementChild,action?chapter.prompt(action):'');
+ const pressed=String(save.radio);if($('radio').getAttribute('aria-pressed')!==pressed)$('radio').setAttribute('aria-pressed',pressed);
+ write($('radiotxt'),sim.airTrack?'LIVE 98.4':save.radio?(save.midnight.outcome?'FM 98.4':'FM 98.6'):'RADIO OFF');
+ write($('speed'),String(Math.round(Math.abs(sim.speed)*3.6)).padStart(3,'0'));
+ write($('gear'),sim.speed<-.4?'R':sim.speed<.4?'N':String(Math.min(6,1+Math.floor(sim.speed/7))));
+ const boostWidth=(sim.boost*100)+'%';if(boostShown!==boostWidth){boostShown=boostWidth;$('boostbar').style.width=boostWidth}
+ write($('vehicle'),sim.carName());$('gauge').hidden=!driving;
+ $('timer').hidden=timer===null;write($('timer'),timer===null?'':Math.max(0,timer).toFixed(1)+' s');$('timer').classList.toggle('urgent',timer!==null&&timer<=15);
  $('reward').hidden=rewardUntil<=elapsed;
  const area=district(p.x,p.z);if(area!==lastArea){$('area').innerHTML=area+'<small>'+districtEn(p.x,p.z)+'</small>';lastArea=area}
  const nearby=!driving&&sim.nearCar();let context='';
  const useCar=$('touchF');
- useCar.hidden=driving?Math.abs(sim.speed)>3.4||race.active||save.cab?.stage==='ride':!nearby;
+ useCar.hidden=driving?!sim.canExitAtSpeed()||race.active||save.cab?.stage==='ride':!nearby;
  shownCarAction=useCar.hidden?null:driving?sim.car:nearby;
  let carActionLabel=chapter.carryingMaster?(driving?'带箱下车':'装箱上车'):(driving?'下车':'上车');
  if(save.midnight.stage==='haul')carActionLabel=driving?'带音箱下车':'装音箱上车';
- useCar.lastElementChild.textContent=nearby?carActionLabel+' · '+sim.carName(nearby):carActionLabel;
- useCar.querySelector('kbd').textContent=!driving&&!action&&nearby?'E / F':'F';
- if(chapter.carryingMaster)$('objdist').textContent+='　·　'+(driving?'母带箱已装车':'随身携带母带箱');
- if(touch()){const jump=$('touchJump'),fist=$('touchPunch');document.querySelector('[data-hold="ShiftLeft"]').textContent=driving?'氮气':'奔跑';jump.hidden=false;jump.textContent=driving?'手刹':'跳跃';jump.setAttribute('aria-label',driving?'手刹':'跳跃');fist.hidden=driving;document.querySelector('[data-hold="KeyW"]').textContent=driving?'油门':'前进';document.querySelector('[data-hold="KeyS"]').textContent=driving?'刹车':'后退';const left=document.querySelector('[data-hold="KeyA"]'),right=document.querySelector('[data-hold="KeyD"]');left.textContent=driving?'◀':'左';right.textContent=driving?'▶':'右';left.setAttribute('aria-label',driving?'左转':'左移');right.setAttribute('aria-label',driving?'右转':'右移')}
- const combo=$('combo'),chain=!driving&&sim.combo>0&&sim.time<sim.comboUntil;combo.hidden=!chain;if(chain)combo.querySelector('b').textContent=String(sim.combo);
+ write(useCar.lastElementChild,nearby?carActionLabel+' · '+sim.carName(nearby):carActionLabel);
+ write(useCar.querySelector('kbd'),!driving&&!action&&nearby?'E / F':'F');
+ if(touch()){const jump=$('touchJump'),fist=$('touchPunch');write(document.querySelector('[data-hold="ShiftLeft"]'),driving?'氮气':'奔跑');jump.hidden=false;write(jump,driving?'手刹':'跳跃');const jumpLabel=driving?'手刹':'跳跃';if(jump.getAttribute('aria-label')!==jumpLabel)jump.setAttribute('aria-label',jumpLabel);fist.hidden=driving;write(document.querySelector('[data-hold="KeyW"]'),driving?'油门':'前进');write(document.querySelector('[data-hold="KeyS"]'),driving?'刹车':'后退');const left=document.querySelector('[data-hold="KeyA"]'),right=document.querySelector('[data-hold="KeyD"]');write(left,driving?'◀':'左');write(right,driving?'▶':'右');const leftLabel=driving?'左转':'左移',rightLabel=driving?'右转':'右移';if(left.getAttribute('aria-label')!==leftLabel)left.setAttribute('aria-label',leftLabel);if(right.getAttribute('aria-label')!==rightLabel)right.setAttribute('aria-label',rightLabel)}
+ const combo=$('combo'),chain=!driving&&sim.combo>0&&sim.time<sim.comboUntil;combo.hidden=!chain;if(chain)write(combo.querySelector('b'),String(sim.combo));
  if(save.cab&&dist(p,step)<35)context=cab.hold>0?(save.cab.stage==='pickup'?'乘客正在上车…':'乘客正在下车…'):'在琥珀色圈内刹停';else if(race?.draft)context='尾流充能 ↑　按住加速冲刺';else if(job&&step&&!step.foot&&driving&&!job.time&&dist(p,step)<42)context=relay>0?'正在交接…':(touch()?'刹车入圈，停车交接':'S　刹车入圈，停车交接');
- else if(job&&step?.foot&&driving&&dist(p,step)<19)context=touch()?'刹停后点「下车」取件':'刹停后按 F 下车取件';
+ else if(job&&step?.foot&&driving&&!useCar.hidden&&dist(p,step)<19)context=touch()?'点「下车」取件':'按 F 下车取件';
  else if(touch()&&!driving&&elapsed-startedAt<13)context='拖动画面转向　·　左右平移　·　跳跃　·　出拳';
  else if(!touch()&&elapsed-startedAt<13)context=driving?'W 加速　·　A / D 转向　·　S 刹车　·　空格 手刹':'点击画面转向　·　WASD 行走　·　空格 跳跃　·　左键出拳';
  if(sim.inCar&&sim.car.userData.model===2&&streetRadio?.mode==='off'&&!context)context='停稳后按 B，在这个街区开一场流动电台';if(!context)context=chapter.town.hint();if(action||nearby)context='';if(context!==lastContext){$('context').textContent=context;lastContext=context}
- const wp=$('waypoint');wp.hidden=true;if(step){const dst=dist(p,step),v=sim.station.group.position.clone();v.set(step.x,5.8,step.z).project(sim.camera);
-  if(dst>8&&dst<200&&v.z<1&&v.z>0&&Math.abs(v.x)<.88&&Math.abs(v.y)<.70){wp.hidden=false;wp.style.left=((v.x+1)*50)+'%';wp.style.top=((1-v.y)*50)+'%';wp.lastElementChild.textContent=Math.round(dst)+' m'}}
- paintMap($('minimap'),p,step,save,sim.world.footprints,false,race,visiblePatrols());
+ const wp=$('waypoint');wp.hidden=true;if(step){sim.camera.updateMatrixWorld();const dst=dist(p,step),v=hudPoint.set(step.x,5.8,step.z).project(sim.camera);
+  if(dst>8&&dst<200&&v.z<1&&v.z>0&&Math.abs(v.x)<.88&&Math.abs(v.y)<.70){wp.hidden=false;wp.style.left=((v.x+1)*50)+'%';wp.style.top=((1-v.y)*50)+'%';write(wp.lastElementChild,Math.round(dst)+' m')}}
+ const patrols=visiblePatrols();if(minimapDirty(p,step,patrols))paintMap($('minimap'),p,step,save,sim.world.footprints,false,race,patrols);
 }
 const headers={chapters:['STORY ARCHIVE','选章试玩'],sync:['CITY ARCHIVE','另一窗口已保存进度'],help:['CONTROLS','操作指南'],pause:['PAUSE MENU','已暂停'],jobs:['PALM CITY JOURNAL','城市手记'],map:['PALM CITY / NAVIGATION','城市地图'],drift:['SIDEWAYS CLUB','漂移练习'],cab:['NIGHT DISPATCH','夜班载客'],race:['RACE CONTROL','街头竞速'],garage:['MARLIN CUSTOMS','私人车库'],error:['GRAPHICS','暂时无法进入街区']};
 function showPanel(name){
@@ -233,7 +271,7 @@ function showPanel(name){
  }else if(name==='chapters'){
   body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>海浪账本</h3><p>从后院现场开始，重选取回母带的方法。</p>'+btn('sample-yard','重演火烈鸟之夜')+'</div><div class="chaptercard midnightcard"><small>CHAPTER 02　/　98.4 FM</small><h3>午夜暗频</h3><p>从唱片店出发，选择第一章分账后的街区关系。试玩使用独立进度。</p><div class="actions">'+btn('sample-return','上回把尾款还给了乐手')+btn('sample-keep','上回和玛拉留下了现金')+'</div></div>';
  }else if(name==='help'){
-  body.innerHTML='<div class="helpgrid">'+[['鼠标','步行时转动视角，上下略微俯仰'],['鼠标左键','徒手攻击，身前有人会先贴上去再打'],['W / ↑','驾车油门，步行沿视角前进'],['S / ↓','驾车刹车或倒车，步行后退'],['A / D / ← →','驾车转向，步行左右平移'],['空格','驾车手刹，步行跳跃'],['Shift','氮气加速 / 奔跑'],['E','与附近人物交谈 / 查看物件'],['F','停车后下车 / 就近上车'],['M / J / G','地图 / 调度 / 车库'],['C / R','切换镜头 / 电台'],['B','转播车停稳后，开播或收天线'],['V','明信片相机'],['Esc / P','暂停或恢复']].map(([k,s])=>'<p><kbd>'+k+'</kbd>'+s+'</p>').join('')+'</div><p class="helpnote">金色菱形指向当前剧情目标。对话中可用数字键选择回答。步行时点击画面锁定鼠标；浏览器拒绝锁定时按住右键拖动。触屏拖动空画面转向，左右键是平移，跳跃键在驾车时变为手刹，出拳只在步行时出现。</p>';
+  body.innerHTML='<div class="helpgrid">'+[['鼠标','步行时转动视角，上下略微俯仰'],['鼠标左键','徒手攻击，身前有人会先贴上去再打'],['W / ↑','驾车油门，步行沿视角前进'],['S / ↓','驾车刹车或倒车，步行后退'],['A / D / ← →','驾车转向，步行左右平移'],['空格','驾车手刹，步行跳跃'],['Shift','氮气加速 / 奔跑'],['E','与附近人物交谈 / 查看物件'],['F','下车 / 就近上车'],['M / J / G','地图 / 调度 / 车库'],['C / R','切换镜头 / 电台'],['B','转播车停稳后，开播或收天线'],['V','明信片相机'],['Esc / P','暂停或恢复']].map(([k,s])=>'<p><kbd>'+k+'</kbd>'+s+'</p>').join('')+'</div><p class="helpnote">金色菱形指向当前剧情目标。对话中可用数字键选择回答。步行时点击画面锁定鼠标；浏览器拒绝锁定时按住右键拖动。触屏拖动空画面转向，左右键是平移，跳跃键在驾车时变为手刹，出拳只在步行时出现。</p>';
  }else if(name==='pause'){
   body.innerHTML='<div class="ledger"><span>钱包 '+money(save.money)+'</span><span>载客 '+save.trips+' 单</span><span>完赛 '+Object.values(save.records).reduce((n,r)=>n+r.runs,0)+' 场</span></div><div class="menulist">'+[['resume','继续游玩'],['map','城市地图'],['jobs','城市手记'],['garage','私人车库'],['drift','漂移练习'],['night',save.night?'切换至日落':'切换至午夜'],['photo','拍摄明信片'],['view','切换驾驶视角'],['help','操作指南'],['sound',save.sound?'关闭声音':'打开声音'],['rescue','道路救援'],['menu',replay?'结束回放，返回正式存档':'返回主菜单']].map(([k,s])=>'<button data-act="'+k+'">'+s+icon('arrow')+'</button>').join('')+'</div>';
  }else if(name==='map'){
@@ -429,29 +467,34 @@ function updateActivities(dt,controls){
  const fare=cab.update(dt,controls,line=>{audio.chime();toast('乘客上车 · “'+line+'”');persist()});
  if(fare)dropoff(fare);
 }
+const frameKeys=new Set();
 function loop(now){
  const dt=then?Math.min((now-then)/1000,.12):0;then=now;
- if(screen==='play'&&!panel&&chapter?.talk){chapter.update(dt,true);sim.render()}else if(screen==='play'&&!panel&&sim){
+ if(screen==='play'&&!panel&&chapter?.talk){audio.stopVehicleContacts();chapter.update(dt,true);sim.render(false)}else if(screen==='play'&&!panel&&sim){
   elapsed+=dt;
-  const controls=new Set(keyboardHolds.values());let touchBoost=false;
+  frameKeys.clear();for(const key of keyboardHolds.values())frameKeys.add(key);let touchBoost=false;
   for(const button of touchHolds.values()){
-   const key=button.dataset.hold;controls.add(key);
+   const key=button.dataset.hold;frameKeys.add(key);
    if(key==='ShiftLeft')touchBoost=true;
   }
   // The right thumb can hold boost while the left thumb steers.
-  if(touchBoost&&sim.inCar&&!controls.has('KeyS'))controls.add('KeyW');
+  if(touchBoost&&sim.inCar&&!frameKeys.has('KeyS'))frameKeys.add('KeyW');
   let remaining=dt;
   while(remaining>0){
-   const step=Math.min(remaining,1/40);updateActivities(step,controls);
+   const step=Math.min(remaining,1/40);updateActivities(step,frameKeys);
    finishStep(step);if(timer!==null&&save.mission!==-1){timer-=step;if(timer<=0)failSprint()}
-   lastCheck={x:sim.pos.x,z:sim.pos.z};remaining-=step;
+   lastSample.x=sim.pos.x;lastSample.z=sim.pos.z;lastCheck=lastSample;remaining-=step;
   }
   chapter.update(dt);streetRadio.update(dt);
   if(!race.active)collect();if(target()?.type==='pin'&&dist(sim.pos,save.pin)<5){save.pin=null;persist();toast('已抵达导航终点')}if(elapsed>=toastUntil)$('toast').classList.remove('show');
   if(elapsed>=uiAt){updateHUD();uiAt=elapsed+.09}
   if(elapsed>=savedAt){persist();savedAt=elapsed+2.5}
-  const patrolDistance=Math.min(...visiblePatrols().map(patrol=>dist(sim.pos,patrol)));
-  audio.update(true,save,sim.speed,controls.has('KeyW'),sim.inCar,sim.airTrack,patrolDistance);sim.render();
+  let patrolDistance=Infinity;
+  if(sim.heat){if(sim.patrol?.visible)patrolDistance=Math.min(patrolDistance,dist(sim.pos,sim.patrol.position));if(sim.patrol2?.visible)patrolDistance=Math.min(patrolDistance,dist(sim.pos,sim.patrol2.position))}
+  audio.update(true,save,sim.speed,frameKeys.has('KeyW'),sim.inCar,sim.airTrack,patrolDistance);
+  audio.vehicleContacts(save.sound,sim.vehicleImpacts,sim.vehicleScrapes,sim.camera,sim.time);
+  if(sim.vehicleImpacts)sim.vehicleImpacts.length=0;
+  sim.render();
  }
  requestAnimationFrame(loop)
 }

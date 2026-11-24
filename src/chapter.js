@@ -51,7 +51,7 @@ export class LedgerChapter{
   this.clubLight=new T.PointLight(0xff9a78,110,32,1.3);this.clubLight.position.set(48,5,-121);sim.scene.add(this.clubLight);
   this.marker=new T.Mesh(new T.OctahedronGeometry(.23),new T.MeshBasicMaterial({color:0xffd18a}));sim.scene.add(this.marker);
   this.town=new MidnightDistrict(this);
-  this.residents=new Map(sim.walkers.filter(n=>streetVoices[n.p.userData.role]).map(n=>[n.p.userData.role,n.p]));
+  this.residents=new Map(sim.walkers.filter(n=>streetVoices[n.p.userData.role]).map(n=>[n.p.userData.role,n]));
   this.props.deckPress=new T.Object3D();this.props.deckPress.position.set(40.15,1.7,-128.7);
   this.props.frequencyCard=this.town.set.pass;this.props.canvasBag=this.town.set.bag;
   this.props.consoleDesk=new T.Object3D();this.props.consoleDesk.position.set(185,1.28,-129.4);
@@ -96,7 +96,7 @@ export class LedgerChapter{
  move(stage,line){
   this.close();this.s.stage=stage;this.stageCast();this.api.persist();if(line)this.api.toast(line,5);this.api.refresh();
  }
- close(){if(!this.talk)return;this.talk=null;this.mixer=null;this.town.close();this.keyLight.visible=false;this.rim.visible=false;this.listener.visible=false;this.sim.hero.visible=!this.sim.inCar;this.api.hide();this.sim.resetCamera()}
+ close(){if(!this.talk)return;this.talk=null;this.mixer=null;this.town.close();this.keyLight.visible=false;this.rim.visible=false;this.listener.visible=false;this.sim.hero.visible=!this.sim.inCar;this.api.hide();this.sim.resetCamera();this.api.refresh()}
  say(who,line,choices){
   const same=this.talk?.who===who,open=!this.talk;
   this.talk={who,line,choices};this.api.dialogue(names[who]??midnightSpeakers[who]??streetVoices[who]??({deckPress:['后台唱盘','FLAMINGO / DECK B'],frequencyCard:['调频磁卡','PALM WAVE / ENGINEERING'],canvasBag:['帆布相机包','MAR AZUL / LOST PROPERTY'],consoleDesk:['流动电台','PALM WAVE / REMOTE UNIT']})[who],line,choices);
@@ -106,7 +106,7 @@ export class LedgerChapter{
  pick(i){const action=this.talk?.choices[i]?.[1];if(action)action()}
  camera(){
   if(!this.talk)return;
-  const who=this.talk.who,sim=this.sim,actor=this.cast[who]??this.town.set.actors[who]??this.residents.get(who),object=actor??this.props[who==='case'?'bag':who];
+  const who=this.talk.who,sim=this.sim,actor=this.cast[who]??this.town.set.actors[who]??this.residents.get(who)?.p,object=actor??this.props[who==='case'?'bag':who];
   const pos=object.position,small=!actor,portrait=sim.camera.aspect<.82;
   let dx=1,dz=.28;
   if(who==='mic'){dx=.56;dz=.83}
@@ -142,11 +142,11 @@ export class LedgerChapter{
   else if(s.stage==='done')options=this.farewell?['farewell','club']:['shop','club'];else options=[s.stage];
   const reach={farewell:3.8,board:2.65,intro:4.5,sleeve:3.1,ride:4.0,case:2.9,escape:3.9,return:3.8,shop:3.4,club:3.8,deal:3.25,mix:3.1,stand:2.9};
   const adjacent=this.town.nearby();
-  const scene=options.map(k=>({k,d:places[k]?distance(p,places[k]):Infinity})).filter(o=>o.d<(reach[o.k]??3)).concat(adjacent).sort((a,b)=>a.d-b.d)[0];
+  const scene=options.map(k=>({k,d:places[k]?distance(p,places[k]):Infinity})).filter(o=>o.d<(reach[o.k]??3)).concat(adjacent).sort((a,b)=>a.d-b.d||(a.k==='mid-door'&&b.k==='club'?-1:b.k==='mid-door'&&a.k==='club'?1:0))[0];
   if(scene)return scene.k;
   if(this.sim.heat||!this.api.free())return null;
   const car=this.sim.nearCar();let nearest=null,range=car?Math.min(2.9,distance(p,car.position)):2.9;
-  for(const [key,actor] of this.residents){const d=distance(p,actor.position);if(actor.visible&&d<range){nearest=key;range=d}}
+  for(const [key,n] of this.residents){const d=distance(p,n.p.position);if(n.health>0&&n.flinch<=0&&n.p.visible&&d<range){nearest=key;range=d}}
   return nearest;
  }
  prompt(k){if(streetVoices[k])return '和'+streetVoices[k][0]+'聊聊';if(k?.startsWith('mid-'))return midnightTitles[k.slice(4)];return ({farewell:'和老维克告别',board:'操作演出灯光台',intro:'和玛拉交谈',sleeve:'查看首版封套',ride:'询问后院的情况',deal:'和卡洛斯谈谈',mix:'帮玛拉接入调音台',stand:'拿起舞台立麦',case:'打开母带箱',escape:'请妮娜核验封套',return:'把母带交给老维克',shop:'和老维克叙旧',club:'找妮娜打听后院'})[k]}
@@ -272,7 +272,7 @@ export class LedgerChapter{
    if(sim.custody!==this.custody){sim.clearAlert();s.route=null;sim.placeOnFoot(70.25,-113.8,1.53);this.move('party','玛拉替你保住了封套。回到后院入口，换个办法再试。')}
    else{sim.clearAlert();this.move('return','警戒解除。带母带去码头见老维克。')}
   }
-  if(s.ending==='keep'&&!sim.inCar&&p.x<68.1&&p.x>66.9&&p.z>-117&&p.z<-109){sim.placeOnFoot(70,-113.8,-1.57);this.api.toast('妮娜拦住了你。火烈鸟后院谢绝入场。')}
+  if(s.ending==='keep'&&p.x>30.9&&p.x<68.1&&p.z>-143.4&&p.z<-96.75){if(sim.inCar){p.x=73;p.z=-113.8;p.a=-Math.PI/2;sim.speed=0;sim.motionA=p.a;sim.syncCar()}else sim.placeOnFoot(70,-113.8,-1.57);this.api.toast('妮娜拦住了你。火烈鸟后院谢绝入场。')}
   this.town.update(dt,dialogue);
   const goal=this.target;this.marker.visible=!!goal&&!dialogue&&distance(p,goal)<55&&distance(p,goal)>3.1;
   if(this.marker.visible){this.marker.position.set(goal.x,2.65+.10*Math.sin(t*3),goal.z);this.marker.rotation.y=t*1.4}
