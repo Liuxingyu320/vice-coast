@@ -1,4 +1,4 @@
-import {Box3, Matrix4, Scene} from 'three';
+import {Box3, Matrix4, Scene, Vector3} from 'three';
 import {loadStudio} from '../src/blender-assets.js';
 import {clearOfCrossStreets, loadSave, parkedSpots, roadWidth, spawn, xs, zs} from '../src/data.js';
 import {makeMidnightSet} from '../src/midnight-set.js';
@@ -78,6 +78,27 @@ async function checkCity() {
   check(!onRoad(x,z,w,d), 'Collision inside road at '+[x,z]);
  }
  checkRaceRivalRoutes(check,world.colliders);
+ // The Blender scenery is batched by district. Check its triangles, since the
+ // gameplay colliders alone cannot detect a projecting awning or a misplaced pier.
+ const district=scene.getObjectByName('Tokyo Bay'), triangle=new Box3(), vertex=new Vector3();
+ let checkedFaces=0;
+ district.traverse(mesh=>{
+  if(!mesh.isMesh)return;
+  const {position}=mesh.geometry.attributes, indices=mesh.geometry.index;
+  for(let i=0;i<indices.count;i+=3){
+   triangle.makeEmpty();
+   for(let k=0;k<3;k++){
+    vertex.fromBufferAttribute(position,indices.getX(i+k)).applyMatrix4(mesh.matrixWorld);
+    triangle.expandByPoint(vertex);
+   }
+   const {min,max}=triangle;
+   if(min.y>3.25||max.y<.32)continue;
+   checkedFaces++;
+   check(!onRoad((min.x+max.x)/2,(min.z+max.z)/2,(max.x-min.x)/2,(max.z-min.z)/2),
+    'Blender mesh projects into road: '+mesh.name+' at '+[min.x,min.z]);
+  }
+ });
+ check(checkedFaces>0,'Tokyo scenery was not loaded');
  const transform = new Matrix4(), bounds = new Box3();
  scene.traverse(mesh => {
   if (!mesh.isInstancedMesh) return;
@@ -97,6 +118,13 @@ async function checkCity() {
  save.pin = {vehicleKey:favorite.key, x:favorite.x, z:favorite.z};
  const sim = new Simulation(document.querySelector('canvas'), save, () => {});
  makeMidnightSet(sim);
+ for(let x=148.5;x>=136;x-=.25){
+  check(!sim.blocked(x,54.4,.32,false),'Record shop entrance obstructed at x='+x);
+ }
+ const train=sim.scene.getObjectByProperty('name','Train');
+ sim.world.update(0,sim.camera);const start=train.position.x;
+ sim.world.update(15,sim.camera);check(train.position.x>start+5,'Commuter train is stationary');
+
  for (const role of streetResidents) {
   check(sim.walkers.some(n => n.p.userData.role === role), 'Missing resident '+role);
  }
@@ -117,7 +145,7 @@ async function checkCity() {
  }
  const moved = sim.parkedStreetCar(favorite.key).position;
  check(moved.z !== favorite.z && save.pin.x === moved.x && save.pin.z === moved.z, 'Car pin did not follow relocated vehicle');
- return [xs.length*zs.length+' intersections', world.colliders.length+' collision bounds',
+ return [xs.length*zs.length+' intersections', world.colliders.length+' collision bounds',checkedFaces+' street-level Blender triangles',
          sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations', 'vehicle exit, collision, audio, combat and pursuit regressions'].join(', ');
 }
 

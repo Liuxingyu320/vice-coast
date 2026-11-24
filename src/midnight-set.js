@@ -47,7 +47,7 @@ export function makeMidnightSet(sim){
  // Portable station: tagged flight cases, working dial faces and a guyed antenna.
  const x=185,z=-129.4;
  wall(x,.99,z,2.4,.16,1.08,0x806152);for(const sx of [-1,1])for(const sz of [-.4,.4])b(x+sx,.53,z+sz,.065,.88,.065,ink);
- b(x,1.25,z,1.7,.39,.62,teal);sign(x,1.29,z+.318,1.51,.36,0,'Palm Wave','98.4   •   MOBILE BROADCAST','#263942','#ffe194');
+ b(x,1.25,z,1.7,.39,.62,teal);sign(x,1.29,z+.318,1.51,.36,0,'Bay Wave','98.4   •   MOBILE BROADCAST','#263942','#ffe194');
  for(const dx of [-.57,.57])geo.add(new T.CylinderGeometry(.09,.09,.06,16),x+dx,1.27,z+.34,1,1,1,brass,Math.PI/2);
  for(let j=0;j<9;j++)b(x-.37+j*.088,1.47,z,.046,.015,.31,j<6?cream:coral);
  for(const dx of [-1.8,1.8]){wall(x+dx,.81,z,.77,1.18,.64,ink);for(const yy of [.61,1.06])geo.add(new T.CylinderGeometry(.229,.239,.09,24),x+dx,yy,z+.33,1,1,1,0x444959,Math.PI/2)}
@@ -76,8 +76,8 @@ export function makeMidnightSet(sim){
  }
  // Street noticeboard and a coastal kiosk with a tangible abandoned camera bag.
  for(const px of [176.8,178.65])rod(px,1.12,-104.8,.07,1.98,brass);
- sign(177.7,1.84,-104.8,2.02,.98,0,'Contact Sheet','PALM CITY   /   STREET PHOTOS','#485f61','#fae0b2');
- const photo=label(scene,'Night Shift','PHOTO BY INÉS  /  PALM CITY',1.21,.69,177.69,1.82,-104.77);
+ sign(177.7,1.84,-104.8,2.02,.98,0,'Contact Sheet','TOKYO BAY   /   STREET PHOTOS','#485f61','#fae0b2');
+ const photo=label(scene,'Night Shift','PHOTO BY INÉS  /  TOKYO BAY',1.21,.69,177.69,1.82,-104.77);
  // A hand-printed contact sheet pinned up after the photographer gets her film back.
  photo.material=new T.MeshBasicMaterial({map:canvasTexture(512,300,(c,w,h)=>{
   c.fillStyle='#ddd3ad';c.fillRect(0,0,w,h);
@@ -89,7 +89,7 @@ export function makeMidnightSet(sim){
   c.fillStyle='#33444a';c.font='bold 21px monospace';c.fillText('INÉS  /  NIGHT SHIFT      01 — 03',18,275);
  })});
  const bag=new T.Group();scene.add(bag);item(bag,.43,.28,.23,0xbb956e,0,.15);item(bag,.46,.07,.25,0x6c5756,0,.29);item(bag,.071,.12,.025,brass,0,.21,.126);bag.position.set(198.9,.2,-61.7);
- sign(201.98,3.76,-62.72,3.63,.65,0,'Mar Azul','KIOSK   /   POSTCARDS','#b77167','#ffebc4');
+ sign(201.98,3.76,-62.72,3.63,.65,0,'海の売店','KIOSK   /   POSTCARDS','#b77167','#ffebc4');
  const pass=new T.Group();scene.add(pass);item(pass,.29,.025,.19,cream);item(pass,.22,.028,.043,teal,0,.014,.035);pass.position.set(40.3,1.72,-131.75);
  const crate=new T.Group();scene.add(crate);item(crate,.56,.34,.43,0x977551,0,.18);for(let j=0;j<4;j++)item(crate,.44,.38,.035,[coral,ink,teal,cream][j],0,.29,-.14+j*.08);
  const amp=flightCase(scene);geo.flush();

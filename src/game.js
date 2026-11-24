@@ -133,7 +133,7 @@ let photoYaw=-.75,photoHeight=2.6,photoRadius=6.3,dragPoint=null;
 let relay=0,sprintLock=false,lastCheck=null;const lastSample={x:0,z:0};
 function beginJob(id){
  const resume=save.bookmark?.id===id?save.bookmark.step:0;chapter?.suspend();relay=0;drift.reset();stopRace();clearFare();rewardMode='story';
- save.mission=id;save.bookmark=null;save.step=resume;timer=null;sprintLock=false;lastCheck=null;rewardUntil=0;audio.chime();toast(missions[id].from+'　“'+(id===0?'唱片店等你。粉色光圈就是取货点。':id===1?'先到海景大道集合，再开始计时。':'胶片在小哈瓦那，我在露台等你。')+'”',5);
+ save.mission=id;save.bookmark=null;save.step=resume;timer=null;sprintLock=false;lastCheck=null;rewardUntil=0;audio.chime();toast(missions[id].from+'　“'+(id===0?'唱片店等你。粉色光圈就是取货点。':id===1?'先到湾岸通集合，再开始计时。':'胶片在深川下町，我在露台等你。')+'”',5);
  persist();updateHUD();
 }
 function trackChapter(){
@@ -160,8 +160,8 @@ async function enter(story){
  }sim.resize()}
  catch(e){console.warn('3D initialization:',e.message);$('worldview').hidden=true;$('loading').hidden=true;opening=false;showPanel('error');return}
  $('menu').classList.remove('daypreview');$('menu').hidden=true;$('loading').hidden=true;screen='play';opening=false;startedAt=elapsed;resetControls();lastContext='';$('context').textContent='';lastArea='';sim.resetCamera();
- if(story){trackChapter();toast(save.chapter.ending?chapter.town.journal:save.chapter.stage==='intro'?'海景大道 · 黄昏　　前面戴耳机的人在等你。':chapter.journal,4.5)}
- else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();if(save.chapter.stage==='new'&&!save.walker&&!save.fleet)sim.placeOnFoot(148.45,54.85,1.52);toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
+ if(story){trackChapter();toast(save.chapter.ending?chapter.town.journal:save.chapter.stage==='intro'?'湾岸通 · 黄昏　　前面戴耳机的人在等你。':chapter.journal,4.5)}
+ else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();if(save.chapter.stage==='new'&&!save.walker&&!save.fleet)sim.placeOnFoot(148.45,54.85,.63);toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
  chapter.update(0);
  updateHUD();sim.update(0,idleKeys,target());sim.render();$('worldview').classList.remove('arrival');requestAnimationFrame(()=>$('worldview').classList.add('arrival'));
 }
@@ -216,13 +216,13 @@ function minimapDirty(p,step,patrols){
 }
 function updateHUD(){
  if(!sim)return;streetRadio?.hud();const p=sim.pos,job=missions[save.mission],step=target(),driving=sim.inCar;
- let top=job?'ON AIR　/　'+job.name:'PALM CITY　/　自由漫游';
+ let top=job?'ON AIR　/　'+job.name:'TOKYO BAY　/　自由漫游';
  let text=step?.label??'查看城市委托';
  let distText=step?'◆ '+Math.round(dist(p,step))+' m　·　'+(save.step+1)+' / '+(job?.steps.length??1):'任务 '+save.done.length+'/3　·　录音带 '+save.tapes.length+'/6';
  if(race?.active){const rel=Math.atan2(p.x-step.x,p.z-step.z)-p.a;const behind=Math.cos(rel)<-.55&&dist(p,step)>12;
   top='COAST MOTOR CLUB　/　'+race.spec.name;text='P'+race.rank+' / 4　·　第 '+race.lap+' / '+race.spec.laps+' 圈';distText=(behind?'↶ 旗门在后方':race.draft?'尾流充能 ↑':'旗门 '+(race.passed%race.track.gates.length+1)+' / '+race.track.gates.length)+'　·　'+clock(race.time)}
  else if(save.cab){const f=save.cab;top='COAST CABS　/　'+guests[f.guest].name;distText=Math.round(dist(p,step))+' m　·　'+(f.stage==='pickup'?'停车接客':'舒适 '+Math.round(f.comfort)+'%　小费 '+money(farePay(f).tip)+(f.kind==='express'?'　'+Math.max(0,Math.ceil(fareTerms(f).limit-f.seconds))+'s':''))}
- else if(step?.type==='pin'){top='PALM CITY　/　导航';distText=Math.round(dist(p,step))+' m　·　自设路标'}
+ else if(step?.type==='pin'){top='TOKYO BAY　/　导航';distText=Math.round(dist(p,step))+' m　·　自设路标'}
  if(save.chapter.active&&step?.type!=='pin'){top=replay?'REPLAY　/　后院回放':save.chapter.ending?'CHAPTER 02　/　午夜暗频':'CHAPTER 01　/　海浪账本';text=step?.label??(save.chapter.ending?'午夜暗频 · 已完结':'海浪账本 · 已完结');distText=step?(sim.inCar?'驾车':'步行')+'　·　'+Math.round(dist(p,step))+' m':save.chapter.ending?chapter.town.journal:chapter.journal}
  if(sim.heat){const hidden=sim.spotted&&sim.unseen&&!sim.storyAlert&&!sim.raceClosed;const mark=hidden&&Math.sin(sim.time*7)>0?'☆':'★';const stars=mark.repeat(sim.heat)+(sim.raceClosed&&!sim.storyAlert?'　警戒暂缓':'　警戒中');if(race?.active)distText+='　·　'+stars;else top=stars}
  if(chapter.carryingMaster)distText+='　·　'+(driving?'母带箱已装车':'随身携带母带箱');
@@ -260,7 +260,7 @@ function updateHUD(){
   if(dst>8&&dst<200&&v.z<1&&v.z>0&&Math.abs(v.x)<.88&&Math.abs(v.y)<.70){wp.hidden=false;wp.style.left=((v.x+1)*50)+'%';wp.style.top=((1-v.y)*50)+'%';write(wp.lastElementChild,Math.round(dst)+' m')}}
  const patrols=visiblePatrols();if(minimapDirty(p,step,patrols))paintMap($('minimap'),p,step,save,sim.world.footprints,false,race,patrols);
 }
-const headers={chapters:['STORY ARCHIVE','选章试玩'],sync:['CITY ARCHIVE','另一窗口已保存进度'],help:['CONTROLS','操作指南'],pause:['PAUSE MENU','已暂停'],jobs:['PALM CITY JOURNAL','城市手记'],map:['PALM CITY / NAVIGATION','城市地图'],drift:['SIDEWAYS CLUB','漂移练习'],cab:['NIGHT DISPATCH','夜班载客'],race:['RACE CONTROL','街头竞速'],garage:['MARLIN CUSTOMS','私人车库'],error:['GRAPHICS','暂时无法进入街区']};
+const headers={chapters:['STORY ARCHIVE','选章试玩'],sync:['CITY ARCHIVE','另一窗口已保存进度'],help:['CONTROLS','操作指南'],pause:['PAUSE MENU','已暂停'],jobs:['TOKYO BAY JOURNAL','城市手记'],map:['TOKYO BAY / NAVIGATION','城市地图'],drift:['SIDEWAYS CLUB','漂移练习'],cab:['NIGHT DISPATCH','夜班载客'],race:['RACE CONTROL','街头竞速'],garage:['MARLIN CUSTOMS','私人车库'],error:['GRAPHICS','暂时无法进入街区']};
 function showPanel(name){
  releaseLook();if(chapter?.talk&&name!=='sync')chapter.close();
  if(!panel)previousFocus=document.activeElement;
@@ -297,7 +297,7 @@ function showPanel(name){
 function drawStudio(){const c=$('studio');if(c)showroom(c,sim,paints.find(p=>p.id===save.paint).color,studioYaw)}
 function closePanel(){if(panel==='sync'){location.reload();return}panel='';$('overlay').hidden=true;resetControls();if(previousFocus instanceof HTMLElement&&previousFocus.offsetParent)previousFocus.focus({preventScroll:true});previousFocus=null}
 function toggleSound(){audio.init();save.sound=!save.sound;audio.update(screen==='play'&&!panel,save,sim?.speed||0,false,!!sim?.inCar);if(save.sound)audio.chime();refreshMenu();persist()}
-function toggleRadio(){audio.init();save.radio=!save.radio;toast(save.radio&&save.chapter.route?chapter.broadcast():save.radio?'FM 98.6 · Palm Wave 正在播放':'车载电台已关闭');persist();updateHUD()}
+function toggleRadio(){audio.init();save.radio=!save.radio;toast(save.radio&&save.chapter.route?chapter.broadcast():save.radio?'FM 98.6 · Bay Wave 正在播放':'车载电台已关闭');persist();updateHUD()}
 function pressE(){if(chapter?.nearby())chapter.action();else if(sim&&!sim.inCar)interact()}
 function interact(car){
  if(!sim||screen!=='play'||panel||chapter?.talk)return;
@@ -366,9 +366,9 @@ $('photo').addEventListener('pointermove',e=>{if(!dragPoint)return;photoYaw-=(e.
 for(const name of ['pointerup','pointercancel','lostpointercapture'])$('photo').addEventListener(name,()=>dragPoint=null);
 $('shutter').onclick=()=>{redrawPhoto();const original=$('scene'),post=document.createElement('canvas'),w=original.width,h=original.height,pad=Math.max(12,Math.round(w*.019)),band=Math.max(60,Math.round(w*.067));
  post.width=w+pad*2;post.height=h+pad*2+band;const c=post.getContext('2d');c.fillStyle='#fff0d8';c.fillRect(0,0,post.width,post.height);c.drawImage(original,pad,pad);
- c.fillStyle='#352438';c.font='italic 900 '+Math.round(band*.53)+'px Impact, sans-serif';c.textBaseline='middle';c.fillText('VICE COAST',pad,h+pad+band*.65);
- c.textAlign='right';c.font='600 '+Math.round(band*.23)+'px sans-serif';c.fillText(district(sim.pos.x,sim.pos.z)+'  /  PALM CITY',w+pad,h+pad+band*.67);
- post.toBlob(blob=>{if(!blob)return;const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download='Vice Coast - '+district(sim.pos.x,sim.pos.z)+'.png';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),12000);$('shutter').textContent='明信片已生成'},'image/png');
+ c.fillStyle='#352438';c.font='italic 900 '+Math.round(band*.53)+'px Impact, sans-serif';c.textBaseline='middle';c.fillText('TOKYO BAY',pad,h+pad+band*.65);
+ c.textAlign='right';c.font='600 '+Math.round(band*.23)+'px sans-serif';c.fillText(district(sim.pos.x,sim.pos.z)+'  /  TOKYO BAY',w+pad,h+pad+band*.67);
+ post.toBlob(blob=>{if(!blob)return;const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download='Tokyo Bay - '+district(sim.pos.x,sim.pos.z)+'.png';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),12000);$('shutter').textContent='明信片已生成'},'image/png');
 };
 const mapped={ArrowUp:'KeyW',ArrowDown:'KeyS',ArrowLeft:'KeyA',ArrowRight:'KeyD',ShiftRight:'ShiftLeft'};
 function keyCode(e){return mapped[e.code]||e.code}

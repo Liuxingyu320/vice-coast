@@ -1095,7 +1095,7 @@ export class Simulation{
   if(this.fineHold>2){
    const fee=Math.min(100,this.save.money);this.save.money-=fee;
    this.clearAlert();this.revive();
-   this.notify(fee?'被拘留 · 罚款 $'+fee+' · 送回海景大道':'被拘留 · 送回海景大道');
+   this.notify(fee?'被拘留 · 罚款 $'+fee+' · 送回湾岸通':'被拘留 · 送回湾岸通');
   }
  }
  trafficCommands(dt){
