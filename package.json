@@ -2,6 +2,9 @@
   "name": "vice-coast-caffeine",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter vice-coast-frontend build"
+    "build": "pnpm --filter vice-coast-frontend build",
+    "check": "pnpm --filter vice-coast-frontend check",
+    "fix": "pnpm --filter vice-coast-frontend fix",
+    "typecheck": "pnpm --filter vice-coast-frontend typecheck"
   }
 }

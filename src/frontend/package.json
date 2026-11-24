@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "fix": "pnpm run check",
+    "typecheck": "pnpm run check"
   },
   "dependencies": {
     "three": "0.180.0"

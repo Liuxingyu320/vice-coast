@@ -7,3 +7,9 @@ type = "assets"
 [build]
 commands = ["pnpm build"]
 out = "dist"
+
+[check]
+commands = ["pnpm check"]
+
+[check.fix]
+commands = ["pnpm fix"]
