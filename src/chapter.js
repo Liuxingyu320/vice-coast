@@ -43,8 +43,8 @@ export class LedgerChapter{
   this.sim=sim;this.save=save;this.s=save.chapter;this.api=api;this.talk=null;this.focus=null;this.clock=0;this.cameraBlend=1;
   const add=(role,x,z,a,seed=0)=>{const p=makePerson(role,seed);p.position.set(x,.14,z);p.rotation.y=a;shadow(p,1.03,.76);sim.scene.add(p);return p};
   this.cast={
-   boss:add('civilian',-69.4,105.2,-.4,1),guest:add('civilian',-67.6,105.6,2.4,4),
-   stranger:add('civilian',-66.2,103.4,2.2,8),payer:add('civilian',-67.2,67.4,1.2,3),
+   boss:add('floral',-69.4,105.2,-.4,1),guest:add('civilian',-67.6,105.6,2.4,4),
+   stranger:add('tattoo',-66.2,103.4,2.2,8),payer:add('civilian',-67.2,67.4,1.2,3),
    fresh:add('civilian',-67.2,67.4,.8,11)
   };
   this.fighters=[[-71,18],[-64,14],[-66,20]].map(([x,z],i)=>{const p=add('civilian',x,z,i,i+6);p.userData.home={x,z};return p});

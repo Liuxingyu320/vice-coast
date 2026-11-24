@@ -3,7 +3,7 @@ import {vehicles,additions,streetResidents} from './street-catalog.js';
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {createWorld} from './world.js';
-import {makeCar,makeWalker,stride,canvasTexture} from './models.js';
+import {makeCar,makePatrolCar,makeWalker,stride,canvasTexture} from './models.js';
 import {advanceVehicleBodies,sweepCircleAgainstVehicle,vehicleMass} from './vehicle-physics.js';
 import {rng,spawn,parkedSpots,parkedColors,streetStyles,paints,tapes,clamp,dist,xs,zs,cornerClearance,clearOfCrossStreets,route} from './data.js';
 import {assignMissions,broadsideHeading,chaosForStar,copSees,copSwitchClose,copSwitchFar,interceptManeuver,maneuverSpeed,mellowCruise,presenceRadius,pressureGoal,pursuitAxes,relativePosition,scoreSpawn,shiftOffPartner,starsFromChaos,stoppedGoal,tickChaos,yieldSpeed} from './pursuit.js';
@@ -106,6 +106,7 @@ function simpleBox(p,x,y,z,w,h,d,m){const o=new T.Mesh(unit,m);o.position.set(x,
 const trafficGeometry=new Map();
 const trafficMaterial=new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide});
 export function flattenTraffic(car){
+ if(car.userData.keepMaterials)return car;
  const {shell,model,paint}=car.userData;
  const key=model+'-'+paint.color.getHexString();let geometry=trafficGeometry.get(key);
  if(!geometry){
@@ -174,11 +175,11 @@ export class Simulation{
   this.cars=(save.fleet??[spawn,...parkedSpots]).map((p,i)=>{
    const style=streetStyles[p.trafficId];
    const m=style?makeCar(style.color,p.model??style.model,false):makeCar(parkedColors[i],i%2,true);
-   m.userData.trafficId=p.trafficId;m.position.set(p.x,.07,p.z);m.rotation.y=p.a;this.scene.add(m);return m;
+   m.userData.trafficId=p.trafficId;m.position.set(p.x,this.world.ground(p.x,p.z)+.1,p.z);m.rotation.y=p.a;this.scene.add(m);return m;
   });
   this.carId=save.car;this.car=this.cars[this.carId];this.pos={...save.pos};this.motionA=this.pos.a;
   // If a previous driver saved another car at the default pickup, keep the inactive car clear.
-  for(const [i,c] of this.cars.entries())if(!save.fleet&&i!==this.carId&&Math.hypot(c.position.x-this.pos.x,c.position.z-this.pos.z)<4){const spot=parkedSpots[Math.max(0,this.carId-1)];c.position.set(spot.x,.07,spot.z);c.rotation.y=spot.a}
+  for(const [i,c] of this.cars.entries())if(!save.fleet&&i!==this.carId&&Math.hypot(c.position.x-this.pos.x,c.position.z-this.pos.z)<4){const spot=parkedSpots[Math.max(0,this.carId-1)];c.position.set(spot.x,this.world.ground(spot.x,spot.z)+.1,spot.z);c.rotation.y=spot.a}
   this.syncCar();this.applyPaint();this.hero=makeWalker(44,true);this.hero.visible=false;this.scene.add(this.hero);
   if(save.walker){this.inCar=false;this.pos={...save.walker};this.hero.visible=true}
   this.station=goalMarker();this.scene.add(this.station.group);this.collectibles=tapes.map((p,i)=>{const o=makeTape();o.position.set(p.x,1.5,p.z);o.visible=!save.tapes.includes(i);this.scene.add(o);return o});
@@ -190,14 +191,14 @@ export class Simulation{
    if(segment){
     const healthDisplay=makeWalkerHealthBar();
     this.walkers.push({p,x,...segment,dir,rate,panic:0,down:0,lie:0,ox:0,flinch:0,health:walkerMaxHealth,healthUntil:0,vehicleHitUntil:0,healthDisplay});
-    p.position.set(x,.17,segment.z);this.scene.add(p,healthDisplay.bar);
+    p.position.set(x,this.world.ground(x,segment.z)+.17,segment.z);this.scene.add(p,healthDisplay.bar);
    }}
   this.traffic=[];
   const claimed=new Set(this.cars.map(c=>c.userData.trafficId));
   const addTraffic=(id,pts,idx,v,x,z)=>{
    if(claimed.has(id))return;
    const {color,model}=streetStyles[id],m=flattenTraffic(makeCar(color,model,false));
-   m.userData.trafficId=id;m.position.set(x,.07,z);m.rotation.y=Math.atan2(x-pts[idx].x,z-pts[idx].z);
+   m.userData.trafficId=id;m.position.set(x,this.world.ground(x,z)+.1,z);m.rotation.y=Math.atan2(x-pts[idx].x,z-pts[idx].z);
    this.scene.add(m);this.traffic.push({m,pts,idx,v});
   };
   for(let i=0;i<13;i++){const ix=i%5,iz=(i*3)%5,wide=i%3===0?2:1;
@@ -209,7 +210,7 @@ export class Simulation{
   for(const [i,z] of [[0,20],[1,64],[2,-90]]){const x=i%2?156.3:167.8,dir=i%2?1:-1;
    const pts=dir<0?[{x,z:-236},{x:84,z:-236},{x:84,z:236},{x,z:236}]:[{x,z:236},{x:75.9,z:236},{x:75.9,z:-236},{x,z:-236}];
    addTraffic(13+i,pts,0,6+i*.8,x,z)}
-  if(!claimed.has(16)){const van=makeCar(streetStyles[16].color,2);van.userData.trafficId=16;van.position.set(170,.07,-144);van.rotation.y=Math.PI;this.scene.add(van);this.traffic.push({m:van,parked:true,home:{x:170,z:-144}})}
+  if(!claimed.has(16)){const van=makeCar(streetStyles[16].color,2);van.userData.trafficId=16;van.position.set(170,this.world.ground(170,-144)+.1,-144);van.rotation.y=Math.PI;this.scene.add(van);this.traffic.push({m:van,parked:true,home:{x:170,z:-144}})}
   for(const spot of additions){
    if(claimed.has(spot.parkingId))continue;
    const style=streetStyles[spot.parkingId],m=flattenTraffic(makeCar(style.color,style.model,false));
@@ -219,20 +220,20 @@ export class Simulation{
    let z=spot.z;
    for(let offset=6;!free(z)&&offset<500;offset+=6)z=free(spot.z+offset)?spot.z+offset:spot.z-offset;
    if(!free(z))continue;
-   m.position.set(spot.x,.07,z);m.rotation.y=spot.a;
+   m.position.set(spot.x,this.world.ground(spot.x,z)+.1,z);m.rotation.y=spot.a;
    this.scene.add(m);this.traffic.push({m,parked:true,home:{x:m.position.x,z:m.position.z}});
   }
   const pinned=save.pin?.vehicleKey&&this.parkedStreetCar(save.pin.vehicleKey);
   if(pinned)Object.assign(save.pin,{x:pinned.position.x,z:pinned.position.z});
-  this.patrol=flattenTraffic(makeCar(0xd6ded8,1,false));this.patrol.visible=false;this.scene.add(this.patrol);simpleBox(this.patrol,0,1.6,.1,1.05,.13,.34,black);
-  this.lightR=material(0xff3459);this.lightB=material(0x679cff);simpleBox(this.patrol,-.31,1.72,.1,.4,.13,.29,this.lightR);simpleBox(this.patrol,.31,1.72,.1,.4,.13,.29,this.lightB);
-  this.patrol2=flattenTraffic(makeCar(0xd6ded8,1,false));this.patrol2.visible=false;this.scene.add(this.patrol2);simpleBox(this.patrol2,0,1.6,.1,1.05,.13,.34,black);simpleBox(this.patrol2,-.31,1.72,.1,.4,.13,.29,this.lightR);simpleBox(this.patrol2,.31,1.72,.1,.4,.13,.29,this.lightB);
+  this.patrol=makePatrolCar();this.patrol.visible=false;this.scene.add(this.patrol);
+  this.lightR=this.patrol.userData.lampRed||material(0xff3459);this.lightB=this.patrol.userData.lampBlue||material(0x679cff);
+  this.patrol2=makePatrolCar();this.patrol2.visible=false;this.scene.add(this.patrol2);
   this.custody=0;this.storyAlert=false;this.impactSerial=0;this.raceClosed=false;this.fineHold=0;this.copDispatchAt=0;
   this.impactStrength=0;this.vehicleImpacts=[];this.vehicleScrapes=new Map();this.vehicleContactTimes=new Map();
   this.beam=new T.SpotLight(0xffebc3,225,36,.52,.7,1.35);this.beam.position.set(0,.88,-1.7);this.beam.target.position.set(0,-.12,-22);this.setNight(save.night);this.resize();this.resetCamera();
  }
  setNight(on){this.save.night=on;this.world.setNight(on);this.beam.visible=on;this.car.add(this.beam,this.beam.target)}
- footHeight(x,z){return x>=177.5&&Math.abs(z+128)<=5?.355:.14}
+ footHeight(x,z){return this.world.ground(x,z)+.16}
  placeOnFoot(x,z,a){if(this.inCar)this.resetVehicleMotion(this.car);this.inCar=false;this.speed=0;this.vy=0;this.jumpHeld=true;this.coyote=0;this.jumpBuffer=0;this.walkV.x=this.walkV.z=0;this.pos={x,z,a};this.footY=this.footHeight(x,z);this.hero.visible=true;this.hero.position.set(x,this.footY,z);this.hero.rotation.y=a;this.resetCamera()}
  restoreFootClearance(){
   const {x,z,a}=this.pos;
@@ -254,7 +255,7 @@ export class Simulation{
  }
  beginAlert(level,x,z){
   this.clearAlert();this.storyAlert=true;this.heat=level;
-  const cop=this.patrol;cop.position.set(x,.08,z);cop.visible=true;
+  const cop=this.patrol;cop.position.set(x,this.world.ground(x,z)+.1,z);cop.visible=true;
   cop.rotation.y=Math.atan2(x-this.pos.x,z-this.pos.z);
  }
  gridStart(p){this.carId=0;this.car=this.cars[0];this.resetVehicleMotion(this.car);this.pos={x:p.x,z:p.z,a:p.a};this.motionA=p.a;this.speed=0;this.boost=1;this.emptyBoost=false;this.smoothSteer=0;this.walkV.x=this.walkV.z=0;this.inCar=true;this.hero.visible=false;this.patrol.visible=false;this.patrol2.visible=false;this.caught=this.safe=this.fineHold=0;this.syncCar();this.setNight(this.save.night);this.resetCamera()}
@@ -262,7 +263,7 @@ export class Simulation{
  applyPaint(){this.cars[0].userData.paint.color.setHex(paints.find(p=>p.id===this.save.paint).color)}
  syncCar(){
   if(Math.hypot(this.pos.x-this.car.position.x,this.pos.z-this.car.position.z)>2)this.resetVehicleMotion(this.car);
-  this.car.position.set(this.pos.x,.07,this.pos.z);this.car.rotation.y=this.pos.a;
+  this.car.position.set(this.pos.x,this.world.ground(this.pos.x,this.pos.z)+.1,this.pos.z);this.car.rotation.y=this.pos.a;
  }
  resetVehicleMotion(mesh){if(mesh)delete mesh.userData.vehicleMotion}
  resetCamera(){this.camA=this.pos.a;this.lookPitch=0;this.view(1,true)}
@@ -274,14 +275,14 @@ export class Simulation{
   this.idleAngle+=(wantOffset-this.idleAngle)*(snap?1:1-Math.exp(-dt*2.2));
   const pitch=foot?this.lookPitch:0,lift=Math.sin(pitch);
   const back=this.livePos?9.65:foot?5:high?12:7.6+Math.abs(this.speed)*.027,up=(this.livePos?3.05:foot?2.9:high?7:3.45)-lift*(foot?1.55:0),side=foot?.42:0,s=Math.sin(this.camA-this.idleAngle),c=Math.cos(this.camA-this.idleAngle);
-  const x=p.x+s*back+c*side,z=p.z+c*back-s*side,y=up+this.shake*Math.sin(this.time*76)*.12,arm=this.boom(p.x,p.z,x,z),eye=foot?1.15:1.05;
+  const g=this.world.ground(p.x,p.z),x=p.x+s*back+c*side,z=p.z+c*back-s*side,y=g+up+this.shake*Math.sin(this.time*76)*.12,arm=this.boom(p.x,p.z,x,z),eye=g+(foot?1.15:1.05);
   const dest=camDest.set(p.x+(x-p.x)*arm,eye+(y-eye)*arm,p.z+(z-p.z)*arm),cam=this.camera.position;
   // A wall can fold the boom inside the body. Stay above the roof instead of sitting in the cabin.
-  if(!foot){const reach=Math.hypot(dest.x-p.x,dest.z-p.z);if(reach<this.bodyOf(this.car.userData.model).hl+.4){const roof=(this.carSpec.cargoHeight??1.35)+.55;if(dest.y<roof)dest.y=roof}}
+  if(!foot){const reach=Math.hypot(dest.x-p.x,dest.z-p.z);if(reach<this.bodyOf(this.car.userData.model).hl+.4){const roof=g+(this.carSpec.cargoHeight??1.35)+.55;if(dest.y<roof)dest.y=roof}}
   const pulled=arm<.98&&Math.hypot(cam.x-p.x,cam.z-p.z)>Math.hypot(dest.x-p.x,dest.z-p.z)+.04;
   const through=!snap&&Math.hypot(dest.x-cam.x,dest.z-cam.z)>.45&&this.boom(cam.x,cam.z,dest.x,dest.z)<.92;
   cam.lerp(dest,snap||pulled||through?1:1-Math.exp(-dt*12));
-  const ahead=this.livePos?.3:foot?3:high?6:8,lookY=(foot?1.15:1)+lift*(foot?3.2:0);this.camera.lookAt(p.x-Math.sin(this.camA)*ahead,lookY,p.z-Math.cos(this.camA)*ahead);
+  const ahead=this.livePos?.3:foot?3:high?6:8,lookY=g+(foot?1.15:1)+lift*(foot?3.2:0);this.camera.lookAt(p.x-Math.sin(this.camA)*ahead,lookY,p.z-Math.cos(this.camA)*ahead);
   const fov=(this.camera.aspect<.76?73:61)+Math.abs(this.speed)*.21; if(Math.abs(this.camera.fov-fov)>.08){this.camera.fov=fov;this.camera.updateProjectionMatrix()}
  }
  // Colliders store half-extents. Judge the boom by full length and thickness.
@@ -302,7 +303,8 @@ export class Simulation{
   return arm;
  }
  blocked(x,z,r,includeCars=true){
-  if(x< -256+r||x>225-r||z< -256+r||z>256-r)return true;
+  const lim=this.world.limits;
+  if(x<lim.minX+r||x>lim.maxX-r||z<lim.minZ+r||z>lim.maxZ-r)return true;
   const r2=r*r;
   if(this.forColliders(x-r,z-r,x+r,z+r,o=>{
    const dx=Math.max(0,Math.abs(x-o.x)-o.w),dz=Math.max(0,Math.abs(z-o.z)-o.d);
@@ -356,10 +358,11 @@ export class Simulation{
    const fraction=travel===0?0:Math.max(0,distance/travel);
    if(!hit||fraction<hit.fraction)hit={fraction,nx,nz,overhang:Math.max(0,-distance),barrier};
   };
-  edge(box.x-axes.extentX+256,-dx,1,0,'west');
-  edge(225-box.x-axes.extentX,dx,-1,0,'east');
-  edge(box.z-axes.extentZ+256,-dz,0,1,'north');
-  edge(256-box.z-axes.extentZ,dz,0,-1,'south');
+  const lim=this.world.limits;
+  edge(box.x-axes.extentX-lim.minX,-dx,1,0,'west');
+  edge(lim.maxX-box.x-axes.extentX,dx,-1,0,'east');
+  edge(box.z-axes.extentZ-lim.minZ,-dz,0,1,'north');
+  edge(lim.maxZ-box.z-axes.extentZ,dz,0,-1,'south');
   if(hit?.fraction===0)return hit;
   const reachX=axes.extentX+Math.abs(dx)/2,reachZ=axes.extentZ+Math.abs(dz)/2,cx=box.x+dx/2,cz=box.z+dz/2;
   let bestIndex=1e9;
@@ -501,7 +504,7 @@ export class Simulation{
   this.busted=true;this.health=100;this.healthUntil=0;
   if(this.inCar){this.pos={x:spawn.x,z,a};this.hero.visible=false;this.syncCar();this.resetCamera()}
   else{
-   this.car.position.set(spawn.x,.07,z);this.car.rotation.y=a;
+   this.car.position.set(spawn.x,this.world.ground(spawn.x,z)+.1,z);this.car.rotation.y=a;
    this.placeOnFoot(172.2,z,Math.PI/2);
    if(this.blocked(this.pos.x,this.pos.z,.32))this.restoreFootClearance();
   }
@@ -639,7 +642,7 @@ export class Simulation{
   }
   n.flinch=.36;n.panic=Math.max(n.panic,1.25);
   if(Math.abs(nz)>.15)n.dir=Math.sign(nz);
-  n.p.position.set(n.x+n.ox,.17,n.z);
+  n.p.position.set(n.x+n.ox,this.world.ground(n.x,n.z)+.17,n.z);
   n.p.rotation.y=Math.atan2(nx,nz);
   this.poseWalkerRecoil(n);
  }
@@ -710,7 +713,7 @@ export class Simulation{
   const queued=this.copCommands?.findIndex(command=>command.mesh===mesh)??-1;
   if(queued>=0)this.copCommands.splice(queued,1);
   this.resetVehicleMotion(mesh);
-  mesh.position.set(spot.x,.08,spot.z);mesh.rotation.y=spot.a;mesh.visible=true;
+  mesh.position.set(spot.x,this.world.ground(spot.x,spot.z)+.1,spot.z);mesh.rotation.y=spot.a;mesh.visible=true;
   Object.assign(mesh.userData,{onDuty:true,anchorX:spot.x,anchorZ:spot.z,stuck:0,copSpeed:0,copPath:[],waypoint:0,replanAt:0,mission:this.heat>=2&&slot===1?'ram':'block',holding:false,passing:0,phase:'far',searching:false});
   return true;
  }
@@ -836,7 +839,7 @@ export class Simulation{
   const want=clamp(side*1.1,-1.1,1.1);
   if(legal(want))n.ox=want;else if(legal(-want))n.ox=-want;
  }
- layWalker(n,x){n.p.position.set(x,.05,n.z);n.p.rotation.z=1.2;n.p.rotation.x=0}
+ layWalker(n,x){n.p.position.set(x,this.world.ground(x,n.z)+.05,n.z);n.p.rotation.z=1.2;n.p.rotation.x=0}
  relocateWalker(n){
   const me=this.pos,oldX=n.x,oldZ=n.z,hx=n.hitX??oldX,hz=n.hitZ??oldZ,half=10;
   const blockOf=z=>{const upper=zs.findIndex(v=>v>z);return clamp(upper<0?zs.length-1:upper,1,zs.length-1)};
@@ -864,7 +867,7 @@ export class Simulation{
    if(scenery)continue;
    n.x=x;n.min=segment.min;n.max=segment.max;n.z=segment.z;n.ox=0;n.panic=0;n.down=0;
    n.health=walkerMaxHealth;n.healthUntil=n.flinch=n.vehicleHitUntil=0;n.hitX=n.hitZ=null;
-   n.p.rotation.z=0;n.p.rotation.x=0;n.p.position.set(x,.17,segment.z);n.p.visible=dist(me,n.p.position)<78;
+   n.p.rotation.z=0;n.p.rotation.x=0;n.p.position.set(x,this.world.ground(x,segment.z)+.17,segment.z);n.p.visible=dist(me,n.p.position)<78;
    return true;
   }
   return false;
@@ -896,7 +899,7 @@ export class Simulation{
    const startZ=n.z;
    n.walkVelocity=0;
    if(this.hitStop>0&&n===this.punchVictim){
-    if(n.lie>0)this.layWalker(n,n.hitX);else n.p.position.set(n.x+n.ox,.17,n.z);
+    if(n.lie>0)this.layWalker(n,n.hitX);else n.p.position.set(n.x+n.ox,this.world.ground(n.x,n.z)+.17,n.z);
     n.p.visible=true;continue;
    }
    if(n.lie>0){
@@ -914,7 +917,7 @@ export class Simulation{
    }
    if(n.flinch>0){
     n.flinch=Math.max(0,n.flinch-dt);const x=this.walkerLateral(n);
-    n.p.position.set(x,.17,n.z);this.poseWalkerRecoil(n);
+    n.p.position.set(x,this.world.ground(x,n.z)+.17,n.z);this.poseWalkerRecoil(n);
     const away=dist(me,n.p.position);n.p.visible=away<78;if(n.p.visible)personDetail(n.p,away<14);continue;
    }
    let threat=null,best=1e9;
@@ -931,7 +934,7 @@ export class Simulation{
    }
    const x=this.walkerLateral(n);
    if(dt>0)n.walkVelocity=(n.z-startZ)/dt;
-   n.p.position.set(x,.17,n.z);n.p.rotation.z=0;n.p.rotation.x=0;
+   n.p.position.set(x,this.world.ground(x,n.z)+.17,n.z);n.p.rotation.z=0;n.p.rotation.x=0;
    const away=dist(me,n.p.position);n.p.visible=away<78;
    if(n.p.visible){personDetail(n.p,away<14);n.p.rotation.y=greeting?Math.atan2(me.x-x,n.z-me.z):n.dir<0?0:Math.PI;stride(n.p,this.time*n.rate*4.7+n.x,greeting?.025:1)}
   }
@@ -1203,7 +1206,7 @@ export class Simulation{
   const {mesh,command,vx,vz,yaw}=body;
   mesh.userData.vehicleMotion={vx:vx-(command.vx??0),vz:vz-(command.vz??0),yaw};
   if(command.player){this.finishDriving(body,dt);return}
-  mesh.position.x=body.x;mesh.position.z=body.z;mesh.rotation.y=body.a;
+  mesh.position.x=body.x;mesh.position.y=this.world.ground(body.x,body.z)+.1;mesh.position.z=body.z;mesh.rotation.y=body.a;
   if(command.traffic){command.traffic.vx=vx;command.traffic.vz=vz}
  }
  publishVehicleContact(a,b,hit,contact){
@@ -1271,14 +1274,14 @@ export class Simulation{
   this.pedestrianMotionCount=0;
   if(this.inCar){this.punch=null;this.punchBuffer=false;this.comboUntil=0}else this.walk(dt,keys);
   this.movingCity(dt,keys);
-  const m=this.station;m.group.visible=!!target&&target.type!=='race'&&target.type!=='chapter';if(target){m.ring.material.color.setHex(target.type==='cab'?0xffbc64:target.type==='pin'?0x77d6fc:0xff739c);m.group.position.set(target.x,0,target.z);m.tag.position.y=3.75+Math.sin(this.time*3)*.25;m.tag.rotation.y=this.camA;m.ring.scale.setScalar(1+Math.sin(this.time*2)*.045)}
-  this.collectibles.forEach((o,i)=>{if(!o.visible)return;o.rotation.y=this.time*1.7;o.position.y=1.45+Math.sin(this.time*2+i)*.15;o.visible=!this.save.tapes.includes(i)});
+  const m=this.station;m.group.visible=!!target&&target.type!=='race'&&target.type!=='chapter';if(target){m.ring.material.color.setHex(target.type==='cab'?0xffbc64:target.type==='pin'?0x77d6fc:0xff739c);m.group.position.set(target.x,this.world.ground(target.x,target.z),target.z);m.tag.position.y=3.75+Math.sin(this.time*3)*.25;m.tag.rotation.y=this.camA;m.ring.scale.setScalar(1+Math.sin(this.time*2)*.045)}
+  this.collectibles.forEach((o,i)=>{if(!o.visible)return;o.rotation.y=this.time*1.7;o.position.y=this.world.ground(o.position.x,o.position.z)+1.45+Math.sin(this.time*2+i)*.15;o.visible=!this.save.tapes.includes(i)});
   this.view(dt);this.world.update(this.time,this.camera)
  }
  photo(yaw,height,radius){const p=this.pos,angle=p.a+yaw,dx=Math.sin(angle),dz=Math.cos(angle),arm=this.boom(p.x,p.z,p.x+dx*radius,p.z+dz*radius);
   const back=arm>.999?radius:radius*arm;
   const y=this.inCar&&back<this.bodyOf(this.car.userData.model).hl+.4?Math.max(height,(this.carSpec.cargoHeight??1.35)+.7):height;
-  this.camera.position.set(p.x+dx*back,y,p.z+dz*back);this.camera.lookAt(p.x,this.inCar?.95:1.05,p.z);this.camera.fov=this.camera.aspect<.8?63:51;this.camera.updateProjectionMatrix();this.world.update(this.time,this.camera);this.render(false);
+  const gy=this.world.ground(p.x,p.z);this.camera.position.set(p.x+dx*back,gy+y,p.z+dz*back);this.camera.lookAt(p.x,gy+(this.inCar?.95:1.05),p.z);this.camera.fov=this.camera.aspect<.8?63:51;this.camera.updateProjectionMatrix();this.world.update(this.time,this.camera);this.render(false);
  }
  render(showWalkerHealth=true){
   this.refreshWalkerHealthBars(showWalkerHealth);

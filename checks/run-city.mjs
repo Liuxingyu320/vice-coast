@@ -17,7 +17,7 @@ const temp = mkdtempSync(join(tmpdir(),'palm-city-check-'));
 let server;
 try {
  const {outputFiles} = await build({entryPoints:[fileURLToPath(new URL('./city-layout.js',import.meta.url))],
-  bundle:true, minify:true, write:false, loader:{'.glb':'binary','.wav':'binary','.mp3':'binary'}});
+  bundle:true, minify:true, write:false, loader:{'.glb':'binary','.gz':'binary','.wav':'binary','.mp3':'binary'}});
  const html = `<!doctype html><canvas width="16" height="16"></canvas><pre id="result">Starting</pre>
  <script>
  const result = document.getElementById('result');

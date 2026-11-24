@@ -2,7 +2,12 @@ import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import compressedDistrict from '../assets/shiba-park.glb';
 import { gunzipSync } from 'three/addons/libs/fflate.module.js';
-import vehicleBytes from '../assets/solano-gt.glb';
+import streetVan from '../模型/六辆街头载具-GLB/老式市井面包车.glb';
+import streetBike from '../模型/六辆街头载具-GLB/破旧跨骑摩托车.glb';
+import streetScooter from '../模型/六辆街头载具-GLB/外卖配送电动车.glb';
+import streetEbike from '../模型/六辆街头载具-GLB/共享电驴.glb';
+import streetStall from '../模型/六辆街头载具-GLB/夜市三轮烧烤餐车.glb';
+import patrolCar from '../模型/六辆街头载具-GLB/都市街头巡逻警车.glb';
 import data from '../assets/shiba-layout.json';
 import gateSupports from '../assets/shiba-gate-supports.json';
 import { furnishAvenue } from './shiba/avenue.js';
@@ -72,10 +77,12 @@ async function create() {
   const scene = new T.Scene(),
     camera = new T.PerspectiveCamera(55, 1, 0.21, 4400);
   const loader = new GLTFLoader();
-  let district, car;
+  let district, car, templates;
+  const vehicleBytes = [streetVan, streetBike, streetScooter, streetEbike, streetStall, patrolCar];
+  const vehicleNames = ['streetVan', 'streetBike', 'streetScooter', 'streetEbike', 'streetStall', 'patrol'];
   try {
-    [district, car] = await Promise.all(
-      [gunzipSync(compressedDistrict), vehicleBytes].map(async (bytes) => {
+    const parsed = await Promise.all(
+      [gunzipSync(compressedDistrict), ...vehicleBytes].map(async (bytes) => {
         const buffer =
           bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
             ? bytes.buffer
@@ -83,11 +90,23 @@ async function create() {
         return (await loader.parseAsync(buffer, '')).scene;
       }),
     );
+    district = parsed[0];
+    templates = parsed.slice(1).map((model) => {
+      const rig = new T.Group();
+      model.rotation.y = Math.PI;
+      rig.add(model);
+      return rig;
+    });
+    car = templates[0].clone(true);
   } catch (e) {
     renderer.dispose();
     throw e;
   }
+  car.updateMatrixWorld(true);
   batchCar(car);
+  // #region agent log
+  fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'post-fix',hypothesisId:'F',location:'shiba.js:create',message:'district and vehicles parsed',data:{world:'shiba-park',district:district.name||'',districtMeshes:((r)=>{let n=0;r.traverse(o=>{if(o.isMesh)n++});return n})(district),vehicles:vehicleNames,carMeshes:((r)=>{let n=0;r.traverse(o=>{if(o.isMesh)n++});return n})(car)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   scene.add(district, car);
   car.visible = false;
   const lighting = createLighting(renderer, scene, district, car, data.height);
@@ -96,7 +115,7 @@ async function create() {
   const furniture = buildFurniture(scene, streets, terrain, data, lighting.texture, passable);
   const avenue = furnishAvenue(scene, streets, terrain, passable);
   canvas.dataset.avenue = JSON.stringify(avenue.inventory);
-  const actors = traffic(scene, streets, terrain, data.startWalk);
+  const actors = traffic(scene, streets, terrain, data.startWalk, templates);
   const driving = createDriving(car, terrain, passable, footprints, data.boundary, streets, actors);
   const hud = createHud(data);
   let dark = 0.7;
@@ -305,10 +324,11 @@ async function create() {
           }
           const rate = has('ShiftLeft', 'ShiftRight') ? 7 : 3.8;
           const yaw = state.heading;
-          const vx = (-Math.sin(yaw) * stride + Math.cos(yaw) * strafe) * rate;
-          const vz = (-Math.cos(yaw) * stride - Math.sin(yaw) * strafe) * rate;
-          state.speed = Math.hypot(vx, vz) * Math.sign(stride || 1);
-          if (mag > 0.01) motion(vx * dt, -vz * dt);
+          // Same camera-relative order as the pre-overlay on-foot controls: W is look direction, D is screen right.
+          const stepX = (Math.sin(yaw) * stride + Math.cos(yaw) * strafe) * rate;
+          const stepY = (Math.cos(yaw) * stride - Math.sin(yaw) * strafe) * rate;
+          state.speed = Math.hypot(stepX, stepY) * Math.sign(stride || 1);
+          if (mag > 0.01) motion(stepX * dt, stepY * dt);
         }
         if (state.mode === 'drive' && Math.abs(state.speed) > 0.005)
           driving.move(
@@ -348,13 +368,27 @@ async function create() {
       );
       camera.lookAt(overviewTarget);
     } else if (state.mode === 'walk') {
-      const eye = (state.footY ?? ground) + 1.69 + (state.punch > 0 ? 0.04 : 0);
-      camera.position.set(state.x, eye, -state.y);
-      camera.lookAt(
-        state.x + Math.sin(state.heading) * Math.cos(state.pitch),
-        eye + Math.sin(state.pitch),
-        -state.y - Math.cos(state.heading) * Math.cos(state.pitch),
-      );
+      const yaw = state.heading,
+        s = Math.sin(yaw),
+        c = Math.cos(yaw),
+        foot = state.footY ?? ground,
+        lift = Math.sin(state.pitch),
+        back = 5,
+        shoulder = 0.42;
+      const camX = state.x - s * back + c * shoulder;
+      const camZ = -state.y + c * back + s * shoulder;
+      camera.position.set(camX, Math.max(foot + 2.9 - lift * 1.55, terrain(camX, -camZ) + 0.8), camZ);
+      camera.lookAt(state.x + s * 3, foot + 1.15 + lift * 3.2, -state.y - c * 3);
+      // #region agent log
+      {
+        const now = performance.now();
+        if (!state._dbgCam || now - state._dbgCam > 900) {
+          state._dbgCam = now;
+          const dist = Math.hypot(camera.position.x - state.x, camera.position.z + state.y);
+          fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'pre',hypothesisId:'C',location:'shiba.js:walkCam',message:'shiba camera',data:{mode:state.mode,dist:+dist.toFixed(2),camY:+camera.position.y.toFixed(2)},timestamp:Date.now()})}).catch(()=>{});
+        }
+      }
+      // #endregion
     } else {
       driving.cameraMove(camera, state, ground, dt, now / 1000, !!drag, dark);
     }

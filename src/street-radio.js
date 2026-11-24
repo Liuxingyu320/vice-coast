@@ -40,7 +40,7 @@ export class StreetRadio{
   if(!this.kit)this.kit=onAirKit(this.sim.car);this.kit.kit.visible=true;$('airForm').hidden=true;$('airToggle').focus({preventScroll:true});this.hud();
  }
  arrive(){
-  if(!this.crowd.length)for(let i=0;i<4;i++){const actor=makePerson('civilian',i+7);this.sim.scene.add(actor);this.crowd.push({actor})}
+  if(!this.crowd.length)for(let i=0;i<4;i++){const actor=makePerson('passer'+i,i+7);this.sim.scene.add(actor);this.crowd.push({actor})}
   const p=this.sim.pos;
   this.crowd.forEach((entry,i)=>{
    let angle=p.a+directions[i]+Math.PI;

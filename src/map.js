@@ -1,25 +1,19 @@
-import {xs,zs,tapes,route} from './data.js';
+import {tapes,route} from './data.js';
+import {shibaLimits,shibaRoads} from './shiba-ground.js';
 export function paintMap(canvas,pos,target,save,footprints,big=false,race=null,patrols=[],heat=0){
  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
- const scale=big?Math.min(W/570,H/560):W/135;
- const cx=big?-14:pos.x,cz=big?0:pos.z-9;
+ const spanX=shibaLimits.maxX-shibaLimits.minX,spanZ=shibaLimits.maxZ-shibaLimits.minZ;
+ const scale=big?Math.min(W/(spanX+40),H/(spanZ+40)):W/135;
+ const cx=big?(shibaLimits.minX+shibaLimits.maxX)/2:pos.x,cz=big?(shibaLimits.minZ+shibaLimits.maxZ)/2:pos.z-9;
  const px=x=>(x-cx)*scale+W/2,pz=z=>(z-cz)*scale+H/2;
  const rect=(x,z,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(px(x),pz(z),w*scale,h*scale)};
- ctx.fillStyle='#1a5278';ctx.fillRect(0,0,W,H);rect(-269,-269,494,538,'#8d9288');rect(179,-269,47,537,'#a39a86');rect(-268,-267,443,534,'#6d746c');
- rect(178,-133,65,10,'#b7a48a');
- for(const x of xs)rect(x-8,-251,16,502,'#e4e1d4');
- for(const z of zs)rect(-251,z-8,422,16,'#e4e1d4');
+ ctx.fillStyle='#1a5278';ctx.fillRect(0,0,W,H);rect(shibaLimits.minX,shibaLimits.minZ,spanX,spanZ,'#6d746c');
+ ctx.strokeStyle='#e4e1d4';ctx.lineWidth=big?2:3;ctx.beginPath();
+ for(const [x,z,x2,z2] of shibaRoads){ctx.moveTo(px(x),pz(z));ctx.lineTo(px(x2),pz(z2))}
+ ctx.stroke();
  for(const v of footprints)rect(v.x-v.w/2,v.z-v.d/2,v.w,v.d,'#5c645e');
  if(!big&&heat>0){ctx.fillStyle='rgba(255,79,110,.34)';ctx.fillRect(0,0,W,H)}
- if(big){ctx.fillStyle='#b6c3c366';ctx.font='bold 13px sans-serif';ctx.textAlign='center';for(const [s,x,z] of [['深 川 下 町',-151,34],['新 桥 商 区',32,-128],['芝 浦 广 场',26,125]])ctx.fillText(s,px(x),pz(z))}
- if(big){
-  ctx.save();ctx.strokeStyle='#9ac2ad';ctx.setLineDash([4,3]);ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(px(-264),pz(16.3));ctx.lineTo(px(220),pz(16.3));ctx.stroke();ctx.restore();
-  ctx.font='bold 12px sans-serif';ctx.textAlign='center';ctx.fillStyle='#eed2aa';
-  for(const [label,x,z] of [['芝公园铁塔',105,-119],['有明站',123,16],['潮见码头',204,-128]]){
-   ctx.beginPath();ctx.arc(px(x),pz(z),3.2,0,Math.PI*2);ctx.fill();ctx.fillText(label,px(x),pz(z)-7);
-  }
- }
+ if(big){ctx.fillStyle='#eed2aa';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText('芝公园',px(30),pz(324))}
  if(race?.active){ctx.beginPath();race.track.samples.forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.strokeStyle='#74e9d0';ctx.lineWidth=big?3:4;ctx.stroke();for(const v of race.cars){ctx.fillStyle='#'+v.color.toString(16).padStart(6,'0');ctx.beginPath();ctx.arc(px(v.car.position.x),pz(v.car.position.z),big?4:5,0,Math.PI*2);ctx.fill()}}
  if(target){const points=race?.active?[]:target.type==='chapter'&&Math.hypot(pos.x-target.x,pos.z-target.z)<42?[pos,target]:route(pos,target);const color=target.type==='chapter'?'#ffd08a':target.type==='cab'?'#ffca74':target.type==='pin'?'#7ed5ff':target.type==='race'?'#8af8d5':'#ff6998';ctx.strokeStyle=color;ctx.lineWidth=big?4:5;ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.stroke();
   ctx.fillStyle=color;ctx.strokeStyle='#fff1d5';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px(target.x),pz(target.z),big?6:8,0,Math.PI*2);ctx.fill();ctx.stroke()}

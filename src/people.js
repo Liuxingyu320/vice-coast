@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {studioModel,rigSlots} from './blender-assets.js';
+import {pedestriansReady,pedestrianScene} from './pedestrian-cast.js';
 import {residents} from './street-catalog.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -127,6 +128,127 @@ function farGeometry(c){
 const studioWardrobes={rico:wardrobes.rico,mara:wardrobes.mara,ramon:{skin:0xb37a60,hair:0x312b2b,coat:0x25574f,pants:0xe6d9bd,shoe:0x4e403a}};
 for(const [key,[coat,pants,skin]] of Object.entries(residents))studioWardrobes[key]={coat,pants,skin,hair:0x403834,shoe:0x554b45};
 const distantCast=new Map();
+const castRoles=new Set(['rico','floral','tattoo','passer0','passer1','passer2','passer3','passer4','passer5','passer6','passer7']);
+const castFile={rico:'leather',floral:'floral',tattoo:'tattoo'};
+for(let i=0;i<8;i++)castFile['passer'+i]='passer'+i;
+const castTemplates=new Map();
+function isFaceName(name){
+ if(!name||/后/.test(name))return false;
+ return /面部|眼白|虹膜|嘴唇|鼻|睑/.test(name);
+}
+function sampleMaterial(material){
+ const fallback=material?.color?material.color.clone():new T.Color(0x6d6258);
+ const image=material?.map?.image;
+ if(!image||typeof document==='undefined')return fallback;
+ try{
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=4;
+  const context=canvas.getContext('2d',{willReadFrequently:true});
+  context.drawImage(image,0,0,4,4);
+  const data=context.getImageData(0,0,4,4).data;
+  let r=0,g=0,b=0,n=0;
+  for(let i=0;i<data.length;i+=4){if(data[i+3]<20)continue;r+=data[i];g+=data[i+1];b+=data[i+2];n++}
+  if(!n)return fallback;
+  return new T.Color(r/(n*255),g/(n*255),b/(n*255));
+ }catch{return fallback}
+}
+function buildCastTemplate(role){
+ const scene=pedestrianScene(castFile[role]);
+ if(!scene)throw new Error('缺少路人模型 '+role);
+ scene.updateMatrixWorld(true);
+ const baked=[];
+ const facePoints=[];
+ scene.traverse(mesh=>{
+  if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+  const name=mesh.name||'';
+  if(/camera|light|ground|floor|背景/i.test(name))return;
+  const geo=mesh.geometry.clone();
+  geo.applyMatrix4(mesh.matrixWorld);
+  geo.computeBoundingBox();
+  const size=geo.boundingBox.getSize(new T.Vector3());
+  const wide=Math.max(size.x,size.y,size.z),flat=Math.min(size.x,size.y,size.z);
+  if(wide>4&&flat<wide*.02){geo.dispose();return}
+  if(geo.attributes.position.count<3){geo.dispose();return}
+  baked.push({name,geo,material:[].concat(mesh.material)[0]});
+  if(isFaceName(name))facePoints.push(geo.boundingBox.getCenter(new T.Vector3()));
+ });
+ scene.traverse(mesh=>{if(mesh.isMesh&&mesh.geometry)mesh.geometry.dispose()});
+ if(!baked.length)throw new Error('路人模型没有网格 '+role);
+ const box=new T.Box3();
+ for(const item of baked)box.union(item.geo.boundingBox);
+ const height=box.max.y-box.min.y||1;
+ const scale=height>2.4||height<1.2?1.72/height:1;
+ const body=box.getCenter(new T.Vector3());
+ const face=facePoints.length?facePoints.reduce((sum,point)=>sum.add(point),new T.Vector3()).multiplyScalar(1/facePoints.length):null;
+ let yaw=face?Math.atan2(face.x-body.x,-(face.z-body.z)):Math.PI;
+ const fitFor=angle=>{
+  const orient=new T.Matrix4().makeRotationY(angle).multiply(new T.Matrix4().makeScale(scale,scale,scale));
+  const oriented=box.clone().applyMatrix4(orient);
+  const fit=new T.Matrix4().makeTranslation(-(oriented.min.x+oriented.max.x)/2,-oriented.min.y,-(oriented.min.z+oriented.max.z)/2).multiply(orient);
+  return {fit,oriented};
+ };
+ let fitted=fitFor(yaw);
+ if(face&&face.clone().applyMatrix4(fitted.fit).z>body.clone().applyMatrix4(fitted.fit).z)fitted=fitFor(yaw+Math.PI);
+ const buckets=new Map();
+ const cloth=/衣|裤|裙|夹克|西装|衬衫|针织|靴|鞋|外套|吊带|皮|领/;
+ for(const item of baked){
+  let geo=item.geo;
+  geo.applyMatrix4(fitted.fit);
+  if(geo.index){const next=geo.toNonIndexed();geo.dispose();geo=next}
+  if(!geo.attributes.normal)geo.computeVertexNormals();
+  const material=item.material,sig=(material?.uuid||'none')+'|'+Object.keys(geo.attributes).sort().join(',');
+  if(!buckets.has(sig))buckets.set(sig,{material,geos:[],cloth:false,count:0});
+  const bucket=buckets.get(sig);
+  bucket.geos.push(geo);bucket.count+=geo.attributes.position.count;bucket.cloth=bucket.cloth||cloth.test(item.name);
+ }
+ const visual=new T.Group();visual.name='cast-visual';
+ let red=0,green=0,blue=0,weight=0;
+ for(const bucket of buckets.values()){
+  const color=sampleMaterial(bucket.material),amount=bucket.count*(bucket.cloth?4:1);
+  red+=color.r*amount;green+=color.g*amount;blue+=color.b*amount;weight+=amount;
+  let geo;
+  try{
+   geo=bucket.geos.length===1?bucket.geos[0]:mergeGeometries(bucket.geos,false);
+   if(!geo)throw new Error('merge');
+   if(bucket.geos.length>1)bucket.geos.forEach(geometry=>geometry.dispose());
+  }catch{
+   for(const geometry of bucket.geos)visual.add(new T.Mesh(geometry,bucket.material));
+   continue;
+  }
+  geo.computeBoundingSphere();
+  const mesh=new T.Mesh(geo,bucket.material);
+  mesh.castShadow=false;mesh.receiveShadow=false;
+  if(bucket.material&&(bucket.material.transparent||bucket.material.alphaTest>0))bucket.material.side=T.DoubleSide;
+  visual.add(mesh);
+ }
+ const coat=weight?new T.Color(red/weight,green/weight,blue/weight).getHex():0x6d6258;
+ const tint=new T.Color(coat);
+ const root=new T.Group();
+ const torso=new T.Group();torso.name='cast-torso';root.add(torso);torso.add(visual);
+ const fittedHeight=fitted.oriented.max.y-fitted.oriented.min.y;
+ const headY=fittedHeight>1.5&&fittedHeight<2.1?1.5:fittedHeight*.84;
+ const head=new T.Group();head.name='cast-head';head.position.y=headY;torso.add(head);
+ const surface=new T.Group();surface.name='rico_head_surface';surface.position.y=-headY;head.add(surface);
+ const hinge=(name,parent)=>{const node=new T.Group();node.name=name;parent.add(node)};
+ for(const side of ['L','R']){
+  hinge('cast-arm_'+side,torso);hinge('cast-elbow_'+side,torso);hinge('cast-leg_'+side,root);hinge('cast-knee_'+side,root);
+ }
+ if(!distantCast.has(role))distantCast.set(role,farGeometry({coat,pants:tint.clone().multiplyScalar(.72).getHex(),skin:0xb48164,hair:tint.clone().multiplyScalar(.4).getHex(),shoe:0x3a3330}));
+ // #region agent log
+ fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'pre',hypothesisId:'B',location:'people.js:buildCastTemplate',message:'cast fit',data:{role,meshes:baked.length,minY:+box.min.y.toFixed(3),maxY:+box.max.y.toFixed(3),minZ:+box.min.z.toFixed(3),maxZ:+box.max.z.toFixed(3),spanY:+(box.max.y-box.min.y).toFixed(3),spanZ:+(box.max.z-box.min.z).toFixed(3),height:+height.toFixed(3),scale:+scale.toFixed(3),yaw:+yaw.toFixed(3),face:!!face},timestamp:Date.now()})}).catch(()=>{});
+ // #endregion
+ const far=new T.Mesh(distantCast.get(role),skinMaterial);far.name='cast-far';far.visible=false;root.add(far);
+ return root;
+}
+function spawnCast(role){
+ if(!castTemplates.has(role))castTemplates.set(role,buildCastTemplate(role));
+ const root=castTemplates.get(role).clone(true);
+ const find=name=>root.getObjectByName(name);
+ const pair=part=>[find('cast-'+part+'_L'),find('cast-'+part+'_R')];
+ const slots={torso:find('cast-torso'),head:find('cast-head'),arms:pair('arm'),elbows:pair('elbow'),legs:pair('leg'),knees:pair('knee'),far:find('cast-far')};
+ if(!slots.torso||!slots.head||!slots.far||[...slots.arms,...slots.elbows,...slots.legs,...slots.knees].some(node=>!node))throw new Error('路人节点缺失 '+role);
+ root.userData={role,...slots};
+ return root;
+}
 function studioPerson(role){
  const root=studioModel(role),slots=rigSlots(root);
  if(!distantCast.has(role))distantCast.set(role,farGeometry(studioWardrobes[role]));
@@ -137,6 +259,13 @@ function studioPerson(role){
  return root;
 }
 export function makePerson(role='civilian',seed=0){
+ if(castRoles.has(role)&&pedestriansReady())return spawnCast(role);
+ if(castRoles.has(role)){
+  // #region agent log
+  fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'pre',hypothesisId:'A',location:'people.js:makePerson',message:'cast not ready',data:{role,ready:pedestriansReady()},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if(role!=='rico')role='civilian';
+ }
  if(Object.hasOwn(studioWardrobes,role))return studioPerson(role);
  const idx=role==='civilian'?Math.abs(seed)%6:0,key=role+idx;
  if(!templates.has(key))templates.set(key,buildPerson(role,idx));

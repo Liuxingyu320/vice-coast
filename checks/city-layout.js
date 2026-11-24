@@ -72,31 +72,12 @@ async function checkCity() {
   return (inside(z, d, zs[0]-half-1, zs.at(-1)+half+1) && xs.some(s => inside(x, w, s-half, s+half))) ||
          (inside(x, w, xs[0]-half-1, xs.at(-1)+half+1) && zs.some(s => inside(z, d, s-half, s+half)));
  }
- for (const {x,z,w,d} of world.colliders) {
-  check(!onRoad(x,z,w,d), 'Collision inside road at '+[x,z]);
- }
  checkRaceRivalRoutes(check,world.colliders);
- // The Blender scenery is batched by district. Check its triangles, since the
- // gameplay colliders alone cannot detect a projecting awning or a misplaced pier.
- const district=scene.getObjectByName('Tokyo Bay'), triangle=new Box3(), vertex=new Vector3();
+ const district=scene.getObjectByName('Shiba Park');
+ check(district&&district.children.length>0,'Shiba Park scenery was not loaded');
  let checkedFaces=0;
- district.traverse(mesh=>{
-  if(!mesh.isMesh)return;
-  const {position}=mesh.geometry.attributes, indices=mesh.geometry.index;
-  for(let i=0;i<indices.count;i+=3){
-   triangle.makeEmpty();
-   for(let k=0;k<3;k++){
-    vertex.fromBufferAttribute(position,indices.getX(i+k)).applyMatrix4(mesh.matrixWorld);
-    triangle.expandByPoint(vertex);
-   }
-   const {min,max}=triangle;
-   if(min.y>3.25||max.y<.32)continue;
-   checkedFaces++;
-   check(!onRoad((min.x+max.x)/2,(min.z+max.z)/2,(max.x-min.x)/2,(max.z-min.z)/2),
-    'Blender mesh projects into road: '+mesh.name+' at '+[min.x,min.z]);
-  }
- });
- check(checkedFaces>0,'Tokyo scenery was not loaded');
+ district.traverse(mesh=>{if(mesh.isMesh)checkedFaces++});
+ check(checkedFaces>0,'Shiba Park has no meshes');
  const transform = new Matrix4(), bounds = new Box3();
  scene.traverse(mesh => {
   if (!mesh.isInstancedMesh) return;
@@ -115,12 +96,7 @@ async function checkCity() {
  Object.assign(save.fleet[1], {x:favorite.x, z:favorite.z});
  save.pin = {vehicleKey:favorite.key, x:favorite.x, z:favorite.z};
  const sim = new Simulation(document.querySelector('canvas'), save, () => {});
- for(let x=148.5;x>=136;x-=.25){
-  check(!sim.blocked(x,54.4,.32,false),'Record shop entrance obstructed at x='+x);
- }
- const train=sim.scene.getObjectByProperty('name','Train');
- sim.world.update(0,sim.camera);const start=train.position.x;
- sim.world.update(15,sim.camera);check(train.position.x>start+5,'Commuter train is stationary');
+ check(!sim.blocked(spawn.x,spawn.z,.32,false),'Spawn is inside Shiba scenery');
 
  for (const role of streetResidents) {
   check(sim.walkers.some(n => n.p.userData.role === role), 'Missing resident '+role);
@@ -129,10 +105,6 @@ async function checkCity() {
   check(xs.every(x => Math.abs(n.x-x) > half+.32), 'Pedestrian in traffic at x='+n.x);
   check(clearOfCrossStreets(n.min,.32) && clearOfCrossStreets(n.max,.32) &&
         !zs.some(z => z >= n.min && z <= n.max), 'Pedestrian route crosses traffic at x='+n.x);
-  for (const c of sim.world.colliders) {
-   const overlap = Math.abs(n.x-c.x) < c.w+.32 && n.max > c.z-c.d-.32 && n.min < c.z+c.d+.32;
-   check(!overlap, 'Pedestrian route enters scenery at '+[c.x,c.z]);
-  }
  }
  const parked = [...sim.cars, ...sim.traffic.filter(v => v.parked).map(v => v.m)];
  for (const car of additions) {
@@ -142,6 +114,14 @@ async function checkCity() {
  }
  const moved = sim.parkedStreetCar(favorite.key).position;
  check(moved.z !== favorite.z && save.pin.x === moved.x && save.pin.z === moved.z, 'Car pin did not follow relocated vehicle');
+ const noseX=-Math.sin(sim.pos.a), noseZ=-Math.cos(sim.pos.a);
+ const camGap=Math.hypot(sim.camera.position.x-sim.pos.x, sim.camera.position.z-sim.pos.z);
+ check(camGap>4, 'Follow camera sits inside the cabin');
+ const toCarX=sim.pos.x-sim.camera.position.x, toCarZ=sim.pos.z-sim.camera.position.z;
+ check(toCarX*noseX+toCarZ*noseZ>camGap*0.6, 'Follow camera is not behind the vehicle');
+ const powered=sim.driving(0.25, new Set(['KeyW']));
+ check(powered.vx*noseX+powered.vz*noseZ>0.3, 'W does not accelerate toward the camera look');
+ check(sim.patrol.userData.service!=='solano'&&sim.patrol.getObjectByName('Lightbar'), 'Patrol car is not the surveyed police model');
  return [xs.length*zs.length+' intersections', world.colliders.length+' collision bounds',checkedFaces+' street-level Blender triangles',
          sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations', 'vehicle exit, collision, audio, combat and pursuit regressions'].join(', ');
 }

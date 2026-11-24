@@ -142,7 +142,11 @@ async function enterShiba(){
  try{
   await visitShiba(()=>{screen='menu';$('menu').hidden=false;$('roam').focus()});
   screen='shiba';$('menu').hidden=true;
- }catch(err){console.warn('Shiba scene:',err.message);screen='menu';showPanel('error')}
+ }catch(err){
+  // #region agent log
+  fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'post-fix',hypothesisId:'F',location:'game.js:enterShiba',message:'shiba open failed',data:{error:String(err&&err.message||err)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  console.warn('Shiba scene:',err.message);screen='menu';showPanel('error')}
  finally{opening=false;$('loading').hidden=true}
 }
 async function enter(story){
@@ -153,8 +157,16 @@ async function enter(story){
   streetRadio=new StreetRadio(sim,save,{persist,toast,chime:()=>audio.chime(),free:()=>!race.active&&!save.cab&&save.mission<0});
   sim.restoreFootClearance();
  }sim.resize()}
- catch(e){console.warn('3D initialization:',e.message);$('worldview').hidden=true;$('loading').hidden=true;opening=false;showPanel('error');return}
+ catch(e){
+  // #region agent log
+  fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'pre',hypothesisId:'E',location:'game.js:enter',message:'enter failed',data:{error:String(e&&e.message||e)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  console.warn('3D initialization:',e.message);$('worldview').hidden=true;$('loading').hidden=true;opening=false;showPanel('error');return}
  $('menu').classList.remove('daypreview');$('menu').hidden=true;$('loading').hidden=true;screen='play';opening=false;startedAt=elapsed;resetControls();lastContext='';$('context').textContent='';lastArea='';sim.resetCamera();
+ // #region agent log
+ fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'pre',hypothesisId:'A',location:'game.js:entered',message:'entered city',data:{inCar:sim.inCar,hero:sim.hero?.userData?.role||'',heroName:sim.hero?.name||'',walkers:sim.walkers?.length??0},timestamp:Date.now()})}).catch(()=>{});
+ fetch('http://127.0.0.1:7326/ingest/e9fbfe8e-3183-45ec-8b50-8cb955649747',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5f55f9'},body:JSON.stringify({sessionId:'5f55f9',runId:'post-fix',hypothesisId:'F',location:'game.js:world',message:'active world',data:{world:'tokyo-bay',car:sim.car?.userData?.source||'studio'},timestamp:Date.now()})}).catch(()=>{});
+ // #endregion
  if(story){trackChapter();toast(chapter.journal,4.5)}
  else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
  chapter.update(0);
@@ -340,7 +352,7 @@ $('panelbody').addEventListener('click',e=>{
  if(act==='rescue'){if(race.active||save.cab){closePanel();toast('请先在调度中结束当前活动再呼叫救援');return}sim.rescue();persist();closePanel()}
  if(act==='view'){changeView();closePanel()}
 });
-$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>{if(shownSceneAction&&chapter.nearby()===shownSceneAction)chapter.action();else updateHUD()};$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=enterShiba;$('legacyRoam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
+$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>{if(shownSceneAction&&chapter.nearby()===shownSceneAction)chapter.action();else updateHUD()};$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=()=>enter(false);$('shibaDistrict').onclick=enterShiba;$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
 $('missionbtn').onclick=()=>{if(save.mission>=0)selectedJob=save.mission;showPanel(race?.active?'race':save.cab?'cab':'jobs')};$('minimapbtn').onclick=()=>showPanel('map');$('radio').onclick=toggleRadio;$('touchF').onclick=()=>{if(shownCarAction)interact(shownCarAction)};
 $('nextjob').onclick=()=>{rewardUntil=0;if(rewardMode==='race')startRace();else if(rewardMode==='cab')startFare();else if(rewardMode==='chapter')updateHUD();else beginJob(selectedJob)};$('rewardpaint').onclick=()=>{rewardUntil=0;showPanel('garage')};$('cruise').onclick=()=>{rewardUntil=0;updateHUD()};
 $('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closePanel()});
@@ -381,7 +393,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Tab'){const list=[...$('overlay').querySelectorAll('button:not(:disabled)')];if(e.shiftKey&&document.activeElement===list[0]){e.preventDefault();list.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===list.at(-1)){e.preventDefault();list[0].focus()}}
   if(['Escape','KeyP'].includes(e.code)||(panel==='map'&&e.code==='KeyM')||(panel==='jobs'&&e.code==='KeyJ')){if(e.code==='Escape'&&performance.now()-swallowEscape<200){swallowEscape=0;e.preventDefault();return}e.preventDefault();if(!e.repeat)closePanel()}return
  }
- if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enterShiba()}return}
+ if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enter(true)}return}
  const k=keyCode(e);if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft'].includes(k)){e.preventDefault();if(!e.repeat)keyboardHolds.set(e.code,k);return}
  if(e.repeat)return;
  switch(k){case 'KeyB':streetRadio.toggle();break;case 'KeyE':pressE();break;case 'KeyG':showPanel('garage');break;case 'KeyV':openPhoto();break;case 'KeyF':interact();break;case 'KeyM':showPanel('map');break;case 'KeyJ':$('missionbtn').click();break;case 'KeyR':toggleRadio();break;case 'KeyC':changeView();break;case 'KeyP':case 'Escape':e.preventDefault();showPanel('pause');break}

@@ -22,7 +22,7 @@ function streetGraph(roads) {
     }
   return { edges, graph };
 }
-export function traffic(scene, streets, terrain, start) {
+export function traffic(scene, streets, terrain, start, vehicleTemplates) {
   const rng = random(21191),
     carCount = 30,
     personCount = 66,
@@ -225,6 +225,19 @@ export function traffic(scene, streets, terrain, start) {
       tint(legs, i * 2 + j, i % 3 ? '#39404b' : '#656565');
     }
   });
+  const fleets = vehicleTemplates?.length
+    ? cars.map((_, i) => {
+        const mesh = vehicleTemplates[i % vehicleTemplates.length].clone(true);
+        mesh.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+        scene.add(mesh);
+        return mesh;
+      })
+    : null;
   const dynamic = [bodies, windows, wheels, front, back, taxiTop, shirt, head, hair, arms, legs, shoes, trim];
   const glowCanvas = document.createElement('canvas');
   glowCanvas.width = 64;
@@ -251,6 +264,7 @@ export function traffic(scene, streets, terrain, start) {
     carCount * 2,
   );
   dynamic.push(reflections);
+  if (fleets) for (const mesh of [bodies, windows, wheels, front, back, taxiTop, trim, reflections]) mesh.visible = false;
   for (let i = 0; i < carCount; i++) {
     tint(reflections, i * 2, '#fff0cf');
     tint(reflections, i * 2 + 1, '#ff352b');
@@ -329,6 +343,11 @@ export function traffic(scene, streets, terrain, start) {
           dy = Math.cos(a),
           z = terrain(c.x, c.y) + 0.11,
           L = c.van ? 4.9 : 4.4;
+        if (fleets) {
+          fleets[i].position.set(c.x, z, -c.y);
+          fleets[i].rotation.y = -a;
+          return;
+        }
         function part(mesh, index, side, fore, elev, w, h, d, pitch = 0) {
           matrix(
             mesh,

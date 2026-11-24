@@ -1,5 +1,6 @@
 import {readLedger,droppedStory} from './ledger-state.js';
 import {additions} from './street-catalog.js';
+import {shibaLimits} from './shiba-ground.js';
 export const xs=[-240,-160,-80,0,80,160], zs=[-240,-160,-80,0,80,160,240];
 export const roadWidth=20;
 // Keep curb ramps and the ends of the crosswalk stripes clear as well as the asphalt.
@@ -65,7 +66,7 @@ export function loadSave(snapshot=readEdition()){
  if(Array.isArray(d.owned))base.owned=[...new Set(['cherry',...d.owned.filter(v=>paints.some(p=>p.id===v))])];
  if(base.owned.includes(d.paint))base.paint=d.paint;
  const mission=legacy?d.mission===1?0:-1:d.mission;if(Number.isInteger(mission)&&missions[mission]){base.mission=mission;base.step=clamp(Math.trunc(d.step)||0,0,missions[mission].steps.length-1);if(missions[mission].time)base.step=0}
- const pose=p=>p&&[p.x,p.z,p.a].every(Number.isFinite)?{x:clamp(p.x,-255,224),z:clamp(p.z,-255,255),a:p.a}:null;
+ const pose=p=>p&&[p.x,p.z,p.a].every(Number.isFinite)?{x:clamp(p.x,shibaLimits.minX+1,shibaLimits.maxX-1),z:clamp(p.z,shibaLimits.minZ+1,shibaLimits.maxZ-1),a:p.a}:null;
  base.pos=pose(d.pos)||base.pos;base.walker=pose(d.walker);
  const fixedCars=parkedSpots.length+1;
  if(Array.isArray(d.fleet)&&d.fleet.length>=fixedCars&&d.fleet.slice(0,fixedCars).every(p=>pose(p))){
