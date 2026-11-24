@@ -1,6 +1,6 @@
 import * as T from 'three';
-import { instances, canvasMap } from './street.js';
-export function buildFurniture(scene, streets, terrain, data, glow) {
+import { instances, canvasMap } from './primitives.js';
+export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   const steel = [],
     rail = [],
     white = [],
@@ -11,7 +11,8 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
     signs = [],
     boxes = [],
     faces = [],
-    stalls = [],
+    pools = [],
+    cones = [],
     glowPositions = [];
   const pole = (rows, x, y, h, w, base = 0, col) =>
     rows.push([x, terrain(x, y) + base + h / 2, -y, w, h, w, 0, col]);
@@ -52,12 +53,26 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
         x = s.x + s.dx * (t - s.start) + s.dy * side,
         y = s.y + s.dy * (t - s.start) - s.dx * side,
         g = terrain(x, y);
+      if (streets.onRoad(x, y, 0.08)) continue;
       pole(steel, x, y, 6.25, 0.105);
       put(steel, x - s.dy * 0.68, y + s.dx * 0.68, g + 6.16, 1.48, 0.075, 0.07, -a);
       put(dark, x - s.dy * 1.38, y + s.dx * 1.38, g + 6.12, 0.55, 0.1, 0.31, -a);
       put(lamp, x - s.dy * 1.38, y + s.dx * 1.38, g + 6.04, 0.48, 0.065, 0.25, -a);
       glowPositions.push(x - s.dy * 1.38, g + 5.98, -y - s.dx * 1.38);
-      if (r.width >= 7) {
+      const hx = x - s.dy * 1.38,
+        hy = y + s.dx * 1.38;
+      cones.push([hx, g + 3.09, -hy, 4.7, 5.85, 4.7]);
+      pools.push([hx, terrain(hx, hy) + 0.154, -hy, 6.9, 1, 8.8, -a]);
+      const crossingClear = !streets.sites.some((q) => {
+        const vx = q.x - x - 1.8 * s.dx,
+          vy = q.y - y - 1.8 * s.dy;
+        return Math.abs(vx * s.dx + vy * s.dy) < 4.6 && Math.abs(vx * s.dy - vy * s.dx) < q.width / 2 + 1.9;
+      });
+      if (
+        r.width >= 7 &&
+        crossingClear &&
+        [0, 0.6, 1.2, 1.8, 2.4, 3, 3.6].every((t) => !streets.onRoad(x + s.dx * t, y + s.dy * t, 0.12))
+      ) {
         for (let j = 0; j < 3; j++) {
           const xx = x + s.dx * (j * 1.8),
             yy = y + s.dy * (j * 1.8);
@@ -95,14 +110,6 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
     g.fillRect(68, 331, 119, 28);
     g.fillRect(207, 275, 27, 46);
   });
-  const storeMap = canvasMap(256, 80, (g) => {
-    g.fillStyle = '#ffe6b1';
-    g.fillRect(0, 0, 256, 80);
-    g.fillStyle = '#a33f31';
-    g.fillRect(0, 0, 8, 80);
-    g.font = 'bold 37px serif';
-    g.fillText('大 門 商 店', 22, 55);
-  });
   const roadSignMap = canvasMap(160, 48, (g) => {
     g.fillStyle = '#e7eae6';
     g.fillRect(0, 0, 160, 48);
@@ -124,15 +131,24 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
   ]) {
     const s = streets.nearest(x0, y0),
       dx = Math.sin(s.heading),
-      dy = Math.cos(s.heading),
-      h = s.heading,
-      off = s.width * 0.5 + 1.2,
-      x = s.x + dy * off,
-      y = s.y - dx * off,
-      g = terrain(x, y);
-    put(boxes, x, y, g + 1.04, 1.16, 2.08, 0.81, -h + Math.PI / 2, x > 550 ? '#9d2533' : '#315e8a');
-    put(faces, x - dy * 0.412, y + dx * 0.412, g + 1.04, 1.08, 1.94, 1, -h - Math.PI / 2);
-    if (x > 550) put(stalls, x + dy * 0.6, y - dx * 0.6, g + 3.25, 2.6, 0.7, 1, -h - Math.PI / 2);
+      dy = Math.cos(s.heading);
+    for (const side of [1, -1]) {
+      const off = side * (s.width / 2 + 1.9);
+      const bank = [0, 1.26, 2.42].map((u) => [s.x + dy * off + dx * u, s.y - dx * off + dy * u]);
+      if (bank.some(([x, y]) => streets.onRoad(x, y, 0.53) || !passable(x, y))) continue;
+      const yaw = Math.atan2(-side * dy, side * dx);
+      bank.forEach(([x, y], i) => {
+        const g = terrain(x, y) + 0.205;
+        if (i === 2) {
+          put(boxes, x, y, g + 0.43, 0.52, 0.86, 0.45, yaw, '#839895');
+          put(dark, x - side * dy * 0.225, y + side * dx * 0.225, g + 0.71, 0.27, 0.09, 0.04, yaw);
+        } else {
+          put(boxes, x, y, g + 1.02, 1.14, 2.04, 0.77, yaw, i ? '#9d3440' : '#355c7c');
+          put(faces, x - side * dy * 0.392, y + side * dx * 0.392, g + 1.02, 1.05, 1.9, 1, yaw);
+        }
+      });
+      break;
+    }
   }
   const box = new T.BoxGeometry(),
     std = (color, metalness = 0) => new T.MeshStandardMaterial({ color, metalness, roughness: 0.6 });
@@ -152,19 +168,42 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
   instances(scene, 'Intersection nameplates', box, new T.MeshStandardMaterial({ map: roadSignMap }), signs);
   instances(scene, 'Vending cabinets', box, std('white'), boxes);
   const vending = new T.MeshStandardMaterial({
-      map: machineMap,
-      emissiveMap: machineMap,
-      emissive: '#fff2e4',
-      side: T.DoubleSide,
-    }),
-    shop = new T.MeshStandardMaterial({
-      map: storeMap,
-      emissiveMap: storeMap,
-      emissive: '#fff1cb',
-      side: T.DoubleSide,
-    });
+    map: machineMap,
+    emissiveMap: machineMap,
+    emissive: '#fff2e4',
+    side: T.DoubleSide,
+  });
   instances(scene, 'Drink displays', panel, vending, faces);
-  instances(scene, 'Daimon shop lightboxes', panel, shop, stalls);
+  const poolMat = new T.MeshBasicMaterial({
+    color: '#ffbe78',
+    map: glow,
+    transparent: true,
+    blending: T.AdditiveBlending,
+    depthWrite: false,
+  });
+  const coneMat = new T.MeshBasicMaterial({
+    color: '#ffc787',
+    transparent: true,
+    blending: T.AdditiveBlending,
+    depthWrite: false,
+    side: T.FrontSide,
+  });
+  coneMat.onBeforeCompile = (sh) => {
+    sh.vertexShader =
+      'varying float beamFalloff;\n' +
+      sh.vertexShader.replace(
+        '#include <project_vertex>',
+        '#include <project_vertex>\nbeamFalloff=smoothstep(-.5,.35,position.y)*(1.-smoothstep(.18,.5,position.y))*(1.-smoothstep(55.,135.,-mvPosition.z));',
+      );
+    sh.fragmentShader =
+      'varying float beamFalloff;\n' +
+      sh.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\ndiffuseColor.a*=beamFalloff;',
+      );
+  };
+  instances(scene, 'Downward streetlight haze', new T.ConeGeometry(0.5, 1, 12, 6, true), coneMat, cones);
+  instances(scene, 'Warm light on asphalt', new T.PlaneGeometry().rotateX(-Math.PI / 2), poolMat, pools);
   const geo = new T.BufferGeometry();
   geo.setAttribute('position', new T.Float32BufferAttribute(glowPositions, 3));
   const halo = new T.PointsMaterial({
@@ -181,7 +220,8 @@ export function buildFurniture(scene, streets, terrain, data, glow) {
     lit.emissiveIntensity = amount * 2.5;
     halo.opacity = amount * 0.68;
     vending.emissiveIntensity = 0.2 + amount * 0.95;
-    shop.emissiveIntensity = amount * 1.4;
+    poolMat.opacity = amount * 0.43;
+    coneMat.opacity = amount * 0.028;
     const phase = time % 13;
     signalMats.forEach(
       (m, i) => (m.emissiveIntensity = i === (phase < 7 ? 0 : phase < 8.5 ? 1 : 2) ? 2.8 : 0.05),

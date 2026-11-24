@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvasMap } from './street.js';
+import { canvasMap } from './primitives.js';
 
 export function batchCar(car) {
   const parts = new Map();

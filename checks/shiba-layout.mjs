@@ -74,9 +74,7 @@ console.log(
 );
 
 assert.equal(map.trees.length, 635);
-assert.ok(
-  map.trees.every((row) => row.length === 5 && row.every(Number.isFinite) && row[3] > 3 && row[4] > 0),
-);
+assert.ok(map.trees.every((row) => row.length === 5 && row.every(Number.isFinite) && row[3] > 3 && row[4] > 0));
 assert.equal(map.roadInfo.length, map.roads.length);
 assert.ok(map.crossings.some((c) => c[0] === 'traffic_signals'));
 assert.ok(!gltf.nodes.some((n) => ['laser-crowns', 'canopy-trunks'].includes(n.name)));
@@ -116,3 +114,91 @@ for (const [x, dx, sign] of [
     'Tangent slide lost after glancing contact',
   );
 }
+
+// Test the serialized triangles that the browser renders, including T junctions with no shared OSM node.
+const { gunzipSync } = await import('node:zlib');
+const paving = JSON.parse(gunzipSync(asset('shiba-pavement.gz')));
+const bins = new Map(),
+  cell = 32;
+const binKey = (x, y) => Math.floor(x / cell) + ',' + Math.floor(y / cell);
+const sides = [-1, 1];
+map.roads.forEach(([kind, line], i) => {
+  if (kind !== 'road') return;
+  const half = map.roadInfo[i][0] / 2 - 0.004;
+  for (let j = 1; j < line.length; j++) {
+    const [x, y] = line[j - 1],
+      [X, Y] = line[j],
+      length = Math.hypot(X - x, Y - y);
+    if (length < 0.02) continue;
+    const dx = (X - x) / length,
+      dy = (Y - y) / length;
+    const polygon = sides.flatMap((side) =>
+      sides.map((end) => [
+        (x + X) / 2 + end * dx * (length / 2 - 0.004) - side * dy * half,
+        (y + Y) / 2 + end * dy * (length / 2 - 0.004) + side * dx * half,
+      ]),
+    );
+    const xs = polygon.map((p) => p[0]),
+      ys = polygon.map((p) => p[1]);
+    const road = {
+      polygon,
+      axes: [
+        [dx, dy],
+        [-dy, dx],
+      ],
+    };
+    for (let u = Math.floor(Math.min(...xs) / cell); u <= Math.floor(Math.max(...xs) / cell); u++)
+      for (let v = Math.floor(Math.min(...ys) / cell); v <= Math.floor(Math.max(...ys) / cell); v++) {
+        const key = u + ',' + v;
+        if (!bins.has(key)) bins.set(key, []);
+        bins.get(key).push(road);
+      }
+  }
+});
+for (const [kind, [xy, faces]] of Object.entries(paving)) {
+  assert.ok(xy.length % 2 === 0 && faces.length % 3 === 0 && xy.every(Number.isInteger));
+  assert.ok(faces.length > 100 && faces.every((i) => Number.isInteger(i) && i >= 0 && i < xy.length / 2));
+  if (!['curb', 'tactile', 'sidewalk', 'forecourt'].includes(kind)) continue;
+  for (let j = 0; j < faces.length; j += 3) {
+    const tri = faces.slice(j, j + 3).map((k) => [xy[k * 2] / 1000, xy[k * 2 + 1] / 1000]);
+    const axes = tri.map(([x, y], k) => [y - tri[(k + 1) % 3][1], tri[(k + 1) % 3][0] - x]);
+    const xs = tri.map((p) => p[0]),
+      ys = tri.map((p) => p[1]);
+    const nearby = new Set();
+    for (const x of [Math.min(...xs), Math.max(...xs)])
+      for (const y of [Math.min(...ys), Math.max(...ys)])
+        for (const road of bins.get(binKey(x, y)) || []) nearby.add(road);
+    for (const road of nearby) {
+      const separate = [...axes, ...road.axes].some(([x, y]) => {
+        const a = tri.map((p) => p[0] * x + p[1] * y),
+          b = road.polygon.map((p) => p[0] * x + p[1] * y);
+        return Math.max(...a) <= Math.min(...b) + 1e-8 || Math.max(...b) <= Math.min(...a) + 1e-8;
+      });
+      assert.ok(separate, kind + ' overlaps motor road at ' + JSON.stringify(tri));
+    }
+  }
+}
+const supports = JSON.parse(asset('shiba-gate-supports.json')),
+  bays = JSON.parse(asset('shiba-frontages.json'));
+for (const name of ['sangedatsumon-gate', 'daimon-gate', 'building-foundations']) {
+  const node = gltf.nodes.find((n) => n.name === name);
+  assert.ok(node && gltf.meshes[node.mesh].primitives.length > 0, name);
+}
+for (const [label, x, y] of [
+  ['三解脱门', 412.08, -148.03],
+  ['增上寺大门', 645.2, -176.2],
+]) {
+  const obstacles = supports[map.verifiedBuildings[label]];
+  assert.ok(obstacles.length >= 4 && obstacles.every((r) => !inside([x, y], r)), label + ' center passage');
+}
+assert.ok(
+  bays.length > 100 &&
+    bays.every(
+      ([x, y, nx, ny, w]) => Number.isFinite(x + y + w) && w > 2 && Math.abs(Math.hypot(nx, ny) - 1) < 0.001,
+    ),
+);
+console.log(
+  'No pavement triangles cross a motor carriageway; verified two gate passages and ' +
+    bays.length +
+    ' measured frontage bays.',
+);

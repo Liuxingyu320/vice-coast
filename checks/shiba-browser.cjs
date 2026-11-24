@@ -45,8 +45,7 @@ async function check(kind) {
       { timeout: 90000 },
     );
     await p.waitForTimeout(3800);
-    const screenshot = async (name) =>
-      p.screenshot({ path: path.join(mobile ? temp : output, name + '.png') });
+    const screenshot = async (name) => p.screenshot({ path: path.join(mobile ? temp : output, name + '.png') });
     async function sample(name, duration) {
       const result = await p.evaluate(
         (ms) =>
@@ -85,7 +84,9 @@ async function check(kind) {
         assert.ok(result.p95Ms <= 25, name + ' uneven frame pacing');
       }
     }
-    assert.equal(await canvas.getAttribute('data-actors'), '30,50');
+    assert.equal(await canvas.getAttribute('data-actors'), '30,66');
+    report.avenue = JSON.parse(await canvas.getAttribute('data-avenue'));
+    for (const [label, count] of Object.entries(report.avenue)) assert.ok(count > 0, 'Missing ' + label);
     assert.equal(await canvas.getAttribute('data-period'), 'dusk');
     if (!mobile) {
       await screenshot('01-黄金黄昏步行');
@@ -161,6 +162,11 @@ async function check(kind) {
         await p.waitForTimeout(120);
         assert.equal(await canvas.getAttribute('data-mode'), 'walk');
         assert.ok(Number(await canvas.getAttribute('data-draw-calls')) <= 180);
+        if (name === '三解脱门' || name === '增上寺大门') {
+          await p.screenshot({ path: path.join(temp, name + '.png') });
+        }
+        await p.locator('#shibaDrive').click();
+        await p.waitForFunction(() => document.querySelector('#shibaCanvas').dataset.mode === 'drive');
       }
     }
     report.peakDrawCalls = Number(await canvas.getAttribute('data-peak-draw-calls'));

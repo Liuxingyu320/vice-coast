@@ -25,7 +25,7 @@ npm run build
 
 `npm run check:shiba` 校验原点、建筑数量、塔尖、边界、树位、地标入口和车辆沿墙滑移。`npm run check:shiba-browser` 使用本机 Chrome 和 Playwright WebKit，对桌面、移动横屏和移动竖屏执行实际交互，记录帧时间、绘制调用与浏览器错误，并重新生成[实测截图和数据](验收/)。首次运行浏览器检查需安装 Chrome，并执行 `npx playwright install webkit`。桌面测试视口为 1280 × 800，移动 WebKit 是浏览器模拟。
 
-道路和树位来源见[测绘说明](art/shiba/sources.md)。路面、树木、街具、30 辆 AI 车辆与 50 名行人在浏览器中生成，不需要联网。
+道路和树位来源见[测绘说明](art/shiba/sources.md)。全图路缘、人行道、盲道与机动车道的三角面经过相交检查。主轴包含 194 个沿建筑实测底边布置的首层开间、两座复原的寺门、30 辆 AI 车辆和 66 名行人。可拖动分界线查看[三组同机位对比](验收/街景近景/同机位对比.html)。
 
 ## 修改项目
 

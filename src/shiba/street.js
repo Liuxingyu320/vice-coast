@@ -1,152 +1,14 @@
+import { layPavement } from './pavement.js';
 import * as T from 'three';
-export function random(seed) {
-  return () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-}
-export function canvasMap(width, height, paint, color = true) {
-  const c = document.createElement('canvas');
-  c.width = width;
-  c.height = height;
-  paint(c.getContext('2d'), width, height);
-  const t = new T.CanvasTexture(c);
-  if (color) t.colorSpace = T.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
-export function instances(scene, name, geometry, material, rows, shadow = false) {
-  if (!rows.length) return null;
-  const mesh = new T.InstancedMesh(geometry, material, rows.length),
-    o = new T.Object3D(),
-    color = new T.Color();
-  rows.forEach(([x, y, z, w, h, d, yaw = 0, tint, pitch = 0, roll = 0], i) => {
-    o.position.set(x, y, z);
-    o.scale.set(w, h, d);
-    o.rotation.set(pitch, yaw, roll, 'YXZ');
-    o.updateMatrix();
-    mesh.setMatrixAt(i, o.matrix);
-    if (tint !== undefined) mesh.setColorAt(i, color.set(tint));
-  });
-  mesh.name = name;
-  mesh.castShadow = shadow;
-  mesh.receiveShadow = true;
-  mesh.computeBoundingSphere();
-  scene.add(mesh);
-  return mesh;
-}
-function asphalt() {
-  const size = 512,
-    rng = random(73),
-    noise = new Uint8Array(size * size);
-  for (let i = 0; i < noise.length; i++) noise[i] = rng() * 255;
-  const grids = [8, 16, 32, 64].map((n) => ({
-    n,
-    values: Float32Array.from({ length: n * n }, () => rng()),
-  }));
-  function field(x, y, { n, values }) {
-    const fx = (x * n) / size,
-      fy = (y * n) / size,
-      i = Math.floor(fx),
-      j = Math.floor(fy),
-      u = fx - i,
-      v = fy - j;
-    const a = u * u * (3 - 2 * u),
-      b = v * v * (3 - 2 * v),
-      at = (i, j) => values[(j % n) * n + (i % n)];
-    return (
-      (at(i, j) * (1 - a) + at(i + 1, j) * a) * (1 - b) + (at(i, j + 1) * (1 - a) + at(i + 1, j + 1) * a) * b
-    );
-  }
-  function paint(rough) {
-    return (g, w, h) => {
-      const img = g.createImageData(w, h);
-      for (let y = 0; y < h; y++)
-        for (let x = 0; x < w; x++) {
-          const i = y * w + x,
-            t = 2 * Math.PI,
-            grain = noise[i] / 255,
-            patch =
-              0.56 * field(x, y, grids[0]) +
-              0.25 * field(x, y, grids[1]) +
-              0.13 * field(x, y, grids[2]) +
-              0.06 * field(x, y, grids[3]);
-          const wet = T.MathUtils.smoothstep(patch, 0.54, 0.86),
-            c = rough ? Math.round(255 * (0.75 - 0.59 * wet)) : 29 + Math.round((grain - 0.5) * 22 - wet * 4);
-          img.data.set(rough ? [c, c, c, 255] : [c, c + 3, c + 9, 255], i * 4);
-        }
-      g.putImageData(img, 0, 0);
-    };
-  }
-  const map = canvasMap(size, size, paint(false)),
-    roughnessMap = canvasMap(size, size, paint(true), false);
-  for (const t of [map, roughnessMap]) t.wrapS = t.wrapT = T.RepeatWrapping;
-  return new T.MeshPhysicalMaterial({
-    map,
-    roughnessMap,
-    roughness: 1,
-    metalness: 0.02,
-    specularIntensity: 0.5,
-    envMapIntensity: 0.47,
-  });
-}
-function roadPlane(scene, name, material, patches, textured) {
-  if (!patches.length) return;
-  const geo = new T.PlaneGeometry(1, 1);
-  geo.rotateX(-Math.PI / 2);
-  const heights = [],
-    uvs = [],
-    rows = [];
-  for (const p of patches) {
-    heights.push(...p.z);
-    uvs.push(p.width / 4, p.length / 4, p.start / 4);
-    rows.push([p.x, 0, -p.y, p.width, 1, p.length, -p.angle]);
-  }
-  geo.setAttribute('cornerElevations', new T.InstancedBufferAttribute(new Float32Array(heights), 4));
-  geo.setAttribute('tileScale', new T.InstancedBufferAttribute(new Float32Array(uvs), 3));
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader =
-      'attribute vec4 cornerElevations;attribute vec3 tileScale;varying vec3 laneSample;\n' +
-      shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <begin_vertex>',
-      '#include <begin_vertex>\ntransformed.y=mix(mix(cornerElevations.x,cornerElevations.y,uv.x),mix(cornerElevations.z,cornerElevations.w,uv.x),uv.y);',
-    );
-    if (textured) {
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <uv_vertex>',
-        '#include <uv_vertex>\nvMapUv=uv*tileScale.xy+vec2(0.,tileScale.z);vRoughnessMapUv=vMapUv;laneSample=vec3(uv.x,(uv.y*tileScale.y+tileScale.z)*4.,tileScale.x*4.);',
-      );
-      shader.fragmentShader = 'varying vec3 laneSample;\n' + shader.fragmentShader;
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
- float roadWidth=laneSample.z;float lateral=(laneSample.x-.5)*roadWidth;
- float edgeStripe=1.-smoothstep(.046,.082,abs(abs(lateral)-roadWidth*.5+.34));
- float dash=1.-smoothstep(.065,.10,abs(lateral));
- float broken=1.-smoothstep(2.7,2.9,mod(laneSample.y,6.));
- vec3 marking=mix(vec3(.71,.72,.67),vec3(.90,.48,.075),step(9.,roadWidth));
- float centre=dash*mix(broken,1.,step(9.,roadWidth));
- diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.62,.65,.65),edgeStripe*step(5.6,roadWidth)*.90);
- diffuseColor.rgb=mix(diffuseColor.rgb,marking,centre*step(6.2,roadWidth)*.92);`,
-      );
-    }
-  };
-  material.customProgramCacheKey = () => name;
-  const obj = instances(scene, name, geo, material, rows);
-  obj.frustumCulled = false;
-}
+import { random, canvasMap, instances } from './primitives.js';
 export function makeStreets(scene, data, terrain, district) {
   const roads = [],
     paths = [],
-    patches = [],
-    curbs = [],
-    white = [],
-    yellow = [],
     stops = [],
     zebras = [],
     junctions = [];
-  const paintMat = (c) => new T.MeshStandardMaterial({ color: c, roughness: 0.46, metalness: 0.04 });
+  const paintMat = (c) =>
+    new T.MeshStandardMaterial({ color: c, roughness: 0.62, emissive: c, emissiveIntensity: 0.3 });
   const junctionMap = new Map();
   for (let i = 0; i < data.roads.length; i++) {
     const [kind, pts] = data.roads[i],
@@ -198,116 +60,18 @@ export function makeStreets(scene, data, terrain, district) {
       }
     return best;
   }
-  for (const r of roads) {
-    for (const s of r.segments) {
-      const n = Math.ceil(s.len / 4.5),
-        len = s.len / n,
-        ang = Math.atan2(s.dx, s.dy),
-        nx = s.dy,
-        ny = -s.dx;
-      for (let j = 0; j < n; j++) {
-        const t = (j + 0.5) * len,
-          x = s.x + s.dx * t,
-          y = s.y + s.dy * t,
-          w = r.width,
-          offset = 0.082 + (r.width > 8 ? 0.018 : 0);
-        const z = [];
-        for (const v of [-1, 1])
-          for (const u of [-1, 1])
-            z.push(
-              terrain(
-                x + v * s.dx * len * 0.5 + u * nx * w * 0.5,
-                y + v * s.dy * len * 0.5 + u * ny * w * 0.5,
-              ) + offset,
-            );
-        patches.push({ x, y, z, width: w, length: len + 0.06, start: s.start + j * len, angle: ang });
-        if (r.category === 'service') continue;
-        const crossing = junctions.some((q) => (q.x - x) ** 2 + (q.y - y) ** 2 < Math.max(4, w * 0.6) ** 2);
-        if (!crossing) {
-          for (const side of [-1, 1]) {
-            const cx = x + nx * (w + 0.18) * 0.5 * side,
-              cy = y + ny * (w + 0.18) * 0.5 * side;
-            const pitch = Math.atan2(
-              terrain(cx + (s.dx * len) / 2, cy + (s.dy * len) / 2) -
-                terrain(cx - (s.dx * len) / 2, cy - (s.dy * len) / 2),
-              len,
-            );
-            curbs.push([cx, terrain(cx, cy) + 0.155, -cy, 0.21, 0.15, len + 0.035, -ang, undefined, pitch]);
-          }
-          if (w >= 6.4) {
-            const centre = r.category === 'primary' || r.category === 'secondary';
-            const target = centre ? yellow : white;
-            const prev = Math.floor((s.start + j * len) / 6),
-              next = Math.floor((s.start + (j + 1) * len) / 6);
-            if (centre || next !== prev)
-              target.push([
-                x,
-                terrain(x, y) + offset + 0.029,
-                -y,
-                0.12,
-                0.014,
-                centre ? len + 0.02 : Math.min(2.8, len),
-                -ang,
-                undefined,
-                Math.atan2((z[2] + z[3] - z[0] - z[1]) * 0.5, len),
-              ]);
-          }
-        }
-      }
-    }
-  }
-  // Mask the coarser aerial terrain under the road strips, including where the two DEM triangulations differ.
-  const allX = data.boundary.map((p) => p[0]),
-    allY = data.boundary.map((p) => p[1]),
-    left = Math.min(...allX) - 12,
-    bottom = Math.min(...allY) - 12,
-    spanX = Math.max(...allX) - left + 12,
-    spanY = Math.max(...allY) - bottom + 12;
-  const roadMask = canvasMap(
-    2048,
-    1536,
-    (g, W, H) => {
-      g.fillStyle = '#000';
-      g.fillRect(0, 0, W, H);
-      g.scale(W / spanX, H / spanY);
-      g.strokeStyle = '#fff';
-      g.lineJoin = 'round';
-      g.lineCap = 'butt';
-      for (const r of roads) {
-        g.lineWidth = Math.max(1, r.width - 0.25);
-        g.beginPath();
-        r.pts.forEach(([x, y], i) =>
-          i ? g.lineTo(x - left, spanY - y + bottom) : g.moveTo(x - left, spanY - y + bottom),
-        );
-        g.stroke();
-      }
-    },
-    false,
-  );
-  district.getObjectByName('shiba-ground')?.traverse((o) => {
-    if (!o.isMesh) return;
-    const m = (o.material = o.material.clone());
-    m.onBeforeCompile = (sh) => {
-      sh.uniforms.roadCoverage = { value: roadMask };
-      sh.vertexShader = 'varying vec2 groundXY;\n' + sh.vertexShader;
-      sh.vertexShader = sh.vertexShader.replace(
-        '#include <begin_vertex>',
-        '#include <begin_vertex>\nvec3 gWorld=(modelMatrix*vec4(transformed,1.)).xyz;groundXY=vec2(gWorld.x,-gWorld.z);',
-      );
-      sh.fragmentShader = 'varying vec2 groundXY;uniform sampler2D roadCoverage;\n' + sh.fragmentShader;
-      sh.fragmentShader = sh.fragmentShader.replace(
-        '#include <clipping_planes_fragment>',
-        `#include <clipping_planes_fragment>
- if(texture2D(roadCoverage,(groundXY-vec2(${left.toFixed(4)},${bottom.toFixed(4)}))/vec2(${spanX.toFixed(4)},${spanY.toFixed(4)})).r>.61)discard;`,
-      );
-    };
-    m.customProgramCacheKey = () => 'survey-ground-with-roads';
-  });
-  roadPlane(scene, 'DEM street surface', asphalt(), patches, true);
+  layPavement(scene, terrain, data, district);
   const box = new T.BoxGeometry();
-  instances(scene, 'Sidewalk curbs', box, paintMat('#a9a79d'), curbs);
-  instances(scene, 'White lane paint', box, paintMat('#dddcc9'), white);
-  instances(scene, 'Yellow lane paint', box, paintMat('#da9e38'), yellow);
+  function onRoad(x, y, margin = 0) {
+    for (const r of roads)
+      for (const s of r.segments) {
+        const dx = x - s.x,
+          dy = y - s.y,
+          t = dx * s.dx + dy * s.dy;
+        if (t >= 0 && t <= s.len && Math.abs(dx * s.dy - dy * s.dx) < r.width * 0.5 + margin) return true;
+      }
+    return false;
+  }
   const sites = [];
   for (const [kind, x, y] of data.crossings) {
     const p = nearest(x, y);
@@ -329,9 +93,9 @@ export function makeStreets(scene, data, terrain, district) {
         cx,
         terrain(cx, cy) + 0.135,
         -cy,
-        0.46,
-        0.019,
-        2.9,
+        0.55,
+        0.022,
+        3.7,
         -p.heading,
         undefined,
         Math.atan2(terrain(cx + dx, cy + dy) - terrain(cx - dx, cy - dy), 2),
@@ -345,7 +109,7 @@ export function makeStreets(scene, data, terrain, district) {
       stops.push([x, terrain(x, y) + 0.14, -y, 1.5, 1, 3.3, -q.heading]);
     }
   const stopTexture = canvasMap(128, 256, (g) => {
-    g.fillStyle = '#e9e6d7';
+    g.fillStyle = '#E8EDF5';
     g.textAlign = 'center';
     g.font = 'bold 65px sans-serif';
     ['止', 'ま', 'れ'].forEach((s, i) => g.fillText(s, 64, 69 + i * 77));
@@ -359,8 +123,8 @@ export function makeStreets(scene, data, terrain, district) {
     new T.MeshStandardMaterial({ map: stopTexture, transparent: true, alphaTest: 0.35, roughness: 0.55 }),
     stops,
   );
-  instances(scene, 'Marked crossings', box, paintMat('#e2e1da'), zebras);
-  return { roads, paths, sites, junctions, nearest };
+  instances(scene, 'Marked crossings', box, paintMat('#E8EDF5'), zebras);
+  return { roads, paths, sites, junctions, nearest, onRoad };
 }
 export function createTrees(scene, trees) {
   const rng = random(662),

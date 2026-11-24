@@ -1,3 +1,4 @@
+import { buildingFinish } from './facades.js';
 import * as T from 'three';
 
 const periods = {
@@ -100,7 +101,7 @@ export function glowMap() {
   g.fillRect(0, 0, 64, 64);
   return new T.CanvasTexture(c);
 }
-export function createLighting(renderer, scene, district, car) {
+export function createLighting(renderer, scene, district, car, height) {
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -119,34 +120,20 @@ export function createLighting(renderer, scene, district, car) {
   scene.add(light, light.target, hemi);
   scene.fog = new T.FogExp2();
   const eveningWindows = { value: 0 };
-  function facadeNight(mat) {
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.eveningWindows = eveningWindows;
-      sh.vertexShader = 'varying vec3 facadePosition;\n' + sh.vertexShader;
-      sh.vertexShader = sh.vertexShader.replace(
-        '#include <begin_vertex>',
-        '#include <begin_vertex>\nfacadePosition=(modelMatrix*vec4(transformed,1.)).xyz;',
-      );
-      sh.fragmentShader = 'varying vec3 facadePosition;uniform float eveningWindows;\n' + sh.fragmentShader;
-      sh.fragmentShader = sh.fragmentShader.replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
- vec3 wp=facadePosition;vec3 nn=normalize(cross(dFdx(wp),dFdy(wp)));
- vec2 cell=vec2(abs(nn.x)>abs(nn.z)?wp.z:wp.x,wp.y)/vec2(2.75,3.44);
- vec2 panel=fract(cell);float lottery=fract(sin(dot(floor(cell),vec2(19.77,31.91)))*7519.37);
- float window=smoothstep(.16,.22,panel.x)*(1.-smoothstep(.77,.85,panel.x))*smoothstep(.22,.30,panel.y)*(1.-smoothstep(.74,.8,panel.y));
- float lightMask=step(.73,lottery)*window*(1.-smoothstep(.18,.5,abs(nn.y)))*smoothstep(12.,26.,wp.y);
- totalEmissiveRadiance+=mix(vec3(.40,.56,.75),vec3(1.,.60,.26),lottery)*lightMask*eveningWindows*.77;`,
-      );
-    };
-    mat.customProgramCacheKey = () => 'sampled-facade-evening';
-  }
+  const finish = buildingFinish(eveningWindows, height);
   const orange = [],
     glass = [],
     facades = [];
   district.traverse((o) => {
     if (!o.isMesh) return;
     o.receiveShadow = true;
+    if (o.parent?.name.endsWith('-gate')) o.castShadow = true;
+    let region = o;
+    while (region && !region.name.startsWith('brid_')) region = region.parent;
+    if (region && o.material.name === 'Warm plaster') {
+      o.material = o.material.clone();
+      o.material.name = 'Bridge concrete';
+    }
     const mat = o.material,
       name = mat.name;
     if (name === 'International orange') {
@@ -155,12 +142,12 @@ export function createLighting(renderer, scene, district, car) {
     }
     if (name === 'Ivory steel' || name === 'Antenna steel') o.castShadow = true;
     if (['Deck glazing', 'Warm windows'].includes(name)) glass.push(mat);
-    if (name.startsWith('Facade') || name.startsWith('Backdrop facade')) {
+    if (name === 'Warm plaster' || name.startsWith('Facade') || name.startsWith('Backdrop facade')) {
       mat.roughness = 0.68;
       mat.metalness = 0.13;
       if (!facades.includes(mat)) {
         facades.push(mat);
-        facadeNight(mat);
+        finish(mat, name === 'Warm plaster');
       }
     }
   });

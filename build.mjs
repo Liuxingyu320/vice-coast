@@ -10,7 +10,7 @@ const offlineDistrict = {
   }));
  }
 };
-const js=await build({entryPoints:['src/game.js'],bundle:true,loader:{'.glb':'binary'},format:'iife',plugins:[offlineDistrict],target:'es2022',minify:true,legalComments:'none',write:false});
+const js=await build({entryPoints:['src/game.js'],bundle:true,loader:{'.glb':'binary','.gz':'binary'},format:'iife',plugins:[offlineDistrict],target:'es2022',minify:true,legalComments:'none',write:false});
 const [shell,css,art,midnight,threeLicense]=await Promise.all([readFile('src/shell.html','utf8'),readFile('src/style.css','utf8'),readFile('assets/shiba-cover.webp'),readFile('assets/tokyo-night.webp'),readFile('node_modules/three/LICENSE','utf8')]);
 let html=shell.replace('/*CSS*/',()=>css).replace('COVER_ASSET',()=>`data:image/webp;base64,${art.toString('base64')}`).replace('MIDNIGHT_ASSET',()=>`data:image/webp;base64,${midnight.toString('base64')}`).replace('/*GAME*/',()=>js.outputFiles[0].text.replace(/<\/script/gi,'<\\/script'));
 html=html.replace('</html>',()=>`<!-- Three.js license\n${threeLicense}\n-->\n</html>`);

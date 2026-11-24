@@ -12,9 +12,13 @@
 
 游戏版使用 635 组点云树位与冠高、冠幅生成实例化乔木。榉树、黑松和樱花树的造型按美术规则分配。信号灯、过街点和道路宽度优先采用 OSM 属性，缺失宽度按道路等级估算。路侧设施、车流、行人、时段灯光和湿路反光均是运行时表现。Blender 中可查看原始树冠、建筑和塔体测量参考。
 
+三解脱门按寺方公布的面阔 19.5 米、进深 9 米、高 21 米，以及文化厅登记的五间三户、二层入母屋结构重建。两座门的方位和基准高度取自各自的 PLATEAU 屋脊及底面。原测绘外壳可在 Blender 的隐藏参考集合内查看。木作、瓦脊和灯笼为近景美术复原。 [增上寺公布的尺寸](https://www.zojoji.or.jp/mame/) · [文化厅登记资料](https://kunishitei.bunka.go.jp/heritage/detail/102/511)
+
+主轴的商业首层贴附于测绘建筑临街底边。店名、陈列、招牌、候车亭和街具采用程序化布景。街区混凝土基座沿实测底圈延伸至少 2.5 米，两座门的基础随实际模型柱位布置。人行道、路缘、盲道和机动车道采用同一组平面裁剪结果，运行时依照测绘高程铺设。
+
 ## 从公开数据重建
 
-已打包的 Blender 工程可直接打开。时间轴第 1、2、3 帧分别切换增上寺方向、街区全域与公园步行视角。公开数据重建需要 Blender 4.5、Python 和数 GB 临时空间。在仓库根目录执行以下命令，缓存目录可复用。OSM 和国土地理院影像会随发布更新，未来下载可能与本版不同。
+已打包的 Blender 工程可直接打开。时间轴第 1、2、3 帧分别切换增上寺方向、街区全域与公园步行视角。公开数据重建需要 Blender 4.5、Python、本机 Chrome 和数 GB 临时空间。在仓库根目录执行以下命令，缓存目录可复用。OSM 和国土地理院影像会随发布更新，未来下载可能与本版不同。
 
 ```sh
 python3 -m venv /tmp/shiba-build-env
@@ -32,6 +36,10 @@ python art/shiba/prepare_navigation.py "$SHIBA_CACHE"
 python art/shiba/context.py "$SHIBA_CACHE" --fetch-only
 python art/shiba/skyline.py "$SHIBA_CACHE"
 python art/shiba/context.py "$SHIBA_CACHE"
+python art/shiba/prepare_pavement.py
+python art/shiba/prepare_frontages.py "$SHIBA_CACHE"
+npm ci
+node art/shiba/bake_facade.cjs "$SHIBA_CACHE"
 blender -b -P art/shiba/build_blender.py -- "$SHIBA_CACHE"
 npm run check:shiba
 npm run build

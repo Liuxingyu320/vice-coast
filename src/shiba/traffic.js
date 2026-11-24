@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { random } from './street.js';
+import { random } from './primitives.js';
 
 function streetGraph(roads) {
   const graph = new Map(),
@@ -25,7 +25,7 @@ function streetGraph(roads) {
 export function traffic(scene, streets, terrain, start) {
   const rng = random(21191),
     carCount = 30,
-    personCount = 50,
+    personCount = 66,
     { edges, graph } = streetGraph(streets.roads);
   const dummy = new T.Object3D(),
     color = new T.Color(),
@@ -42,7 +42,7 @@ export function traffic(scene, streets, terrain, start) {
     return new T.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
   }
   const bodies = batch('Tokyo taxis, saloons and vans', box, material('white', 0.28, 0.45), carCount),
-    windows = batch('Traffic glazing', box, material('#3b5061', 0.2, 0.58), carCount),
+    windows = batch('Traffic glazing', box, material('#718895', 0.16, 0.62), carCount),
     wheels = batch(
       'Traffic tyres',
       new T.CylinderGeometry(0.5, 0.5, 1, 8).rotateZ(Math.PI / 2),
@@ -56,11 +56,51 @@ export function traffic(scene, streets, terrain, start) {
   const front = batch('Traffic headlights', box, headlights, carCount * 2),
     back = batch('Traffic tail lights', box, tails, carCount * 2),
     taxiTop = batch('Taxi roof lanterns', box, material('#fff0c0'), Math.ceil(carCount / 3));
-  const shirt = batch('Pedestrian coats', box, material('white'), personCount),
+  // Lathed clothing and limb profiles retain a human silhouette from a few metres away.
+  const profile = (points, depth = 1) =>
+    new T.LatheGeometry(
+      points.map(([r, h]) => new T.Vector2(r, h)),
+      10,
+    ).scale(1, 1, depth);
+  const jacket = profile(
+    [
+      [0.34, -0.5],
+      [0.49, -0.46],
+      [0.44, 0.05],
+      [0.53, 0.28],
+      [0.42, 0.42],
+      [0.18, 0.5],
+    ],
+    0.94,
+  );
+  const trouser = profile(
+    [
+      [0.34, -0.5],
+      [0.39, -0.43],
+      [0.37, -0.04],
+      [0.48, 0.3],
+      [0.47, 0.5],
+    ],
+    0.95,
+  );
+  const sleeve = profile(
+    [
+      [0.29, -0.5],
+      [0.41, -0.42],
+      [0.4, -0.05],
+      [0.49, 0.3],
+      [0.4, 0.46],
+      [0.2, 0.5],
+    ],
+    0.95,
+  );
+  const shirt = batch('Pedestrian coats', jacket, material('white'), personCount),
     head = batch('Pedestrian heads', new T.SphereGeometry(0.5, 8, 6), material('white'), personCount),
     hair = batch('Pedestrian hair', new T.SphereGeometry(0.5, 8, 5), material('#2b2526'), personCount);
-  const arms = batch('Walking arms', box, material('white'), personCount * 2),
-    legs = batch('Walking legs', box, material('white'), personCount * 2);
+  const arms = batch('Walking arms', sleeve, material('white'), personCount * 2),
+    legs = batch('Walking legs', trouser, material('white'), personCount * 2);
+  const shoes = batch('Pedestrian shoes', box, material('#342f2d'), personCount * 2);
+  const trim = batch('Cab pillars and chrome beltlines', box, material('#b7bec0', 0.34, 0.5), carCount * 4);
   const broad = edges.filter((e) => e.len > 11 && e.r.width >= 5),
     d = Math.hypot(start[0], start[1]),
     forward = [-start[0] / d, -start[1] / d];
@@ -106,11 +146,10 @@ export function traffic(scene, streets, terrain, start) {
       [730, -180],
     ],
     walkers = [];
-  for (let i = 0; i < personCount; i++) {
+  for (let i = 0; i < 50; i++) {
     const area = areas[i % 3],
       candidates = streets.paths.filter(
-        (r) =>
-          r.length > 11 && Math.min(...r.pts.map((p) => Math.hypot(p[0] - area[0], p[1] - area[1]))) < 155,
+        (r) => r.length > 11 && Math.min(...r.pts.map((p) => Math.hypot(p[0] - area[0], p[1] - area[1]))) < 155,
       );
     const path = candidates[Math.floor(rng() * candidates.length)] || streets.paths[i];
     walkers.push({
@@ -120,6 +159,38 @@ export function traffic(scene, streets, terrain, start) {
       speed: 0.8 + rng() * 0.6,
       seed: rng() * 12,
       height: 0.92 + rng() * 0.13,
+    });
+  }
+  const coreWalks = walkers.filter((p) =>
+    p.path.pts.some(([x, y]) => x > 410 || Math.hypot(x - 52, y + 290) < 155),
+  );
+  for (let i = 0; i < 8; i++) {
+    const lead = coreWalks[i % coreWalks.length];
+    lead.side = -0.36;
+    walkers.push({ ...lead, side: 0.39, seed: lead.seed + 1.42, height: lead.height * 0.98 });
+  }
+  const crossings = streets.sites.filter(
+    (s) =>
+      s.kind === 'traffic_signals' &&
+      ((s.x > 400 && s.x < 890 && Math.abs(s.y + 180) < 78) || Math.hypot(s.x - 50, s.y + 275) < 95),
+  );
+  for (let i = 0; i < 8; i++) {
+    const site = crossings[Math.floor(i / 2) % crossings.length],
+      reach = site.width / 2 + 0.73,
+      dx = Math.cos(site.heading),
+      dy = -Math.sin(site.heading),
+      x = site.x - dx * reach + dy * (i % 2) * 0.78,
+      y = site.y - dy * reach - dx * (i % 2) * 0.78;
+    const len = 2 * reach,
+      path = { length: len, segments: [{ x, y, dx, dy, len, start: 0 }] };
+    walkers.push({
+      path,
+      t: 0,
+      dir: 1,
+      speed: 1.32,
+      seed: i * 0.72,
+      height: 0.98 + (i % 3) * 0.025,
+      waiting: true,
     });
   }
   function matrix(mesh, i, x, y, z, w, h, d, yaw = 0, pitch = 0) {
@@ -154,7 +225,7 @@ export function traffic(scene, streets, terrain, start) {
       tint(legs, i * 2 + j, i % 3 ? '#39404b' : '#656565');
     }
   });
-  const dynamic = [bodies, windows, wheels, front, back, taxiTop, shirt, head, hair, arms, legs];
+  const dynamic = [bodies, windows, wheels, front, back, taxiTop, shirt, head, hair, arms, legs, shoes, trim];
   const glowCanvas = document.createElement('canvas');
   glowCanvas.width = 64;
   glowCanvas.height = 64;
@@ -217,7 +288,9 @@ export function traffic(scene, streets, terrain, start) {
       if (!force && accumulated < 1 / 32) return;
       dt = Math.min(0.1, accumulated);
       accumulated = 0;
-      reflections.material.opacity = night * 0.48;
+      reflections.material.opacity = night * 0.67;
+      taxiTop.material.emissive.set('#ffcf78');
+      taxiTop.material.emissiveIntensity = 0.18 + night * 1.12;
       headlights.emissiveIntensity = 0.25 + night * 2.6;
       tails.emissiveIntensity = 0.6 + night * 2;
       cars.forEach((c, i) => {
@@ -272,6 +345,10 @@ export function traffic(scene, streets, terrain, start) {
         }
         part(bodies, i, 0, 0, 0.67, 1.78, 0.76, L);
         part(windows, i, 0, -0.12, c.van ? 1.37 : 1.21, 1.53, c.van ? 0.9 : 0.63, c.van ? 3.55 : 2.33);
+        for (const [j, side] of [-0.763, 0.763].entries()) {
+          part(trim, 4 * i + j * 2, side, -0.12, c.van ? 1.37 : 1.22, 0.038, c.van ? 0.84 : 0.58, 0.1);
+          part(trim, 4 * i + j * 2 + 1, side, 0.0, 0.99, 0.038, 0.043, c.van ? 3.45 : 2.25);
+        }
         for (let k = 0; k < 4; k++)
           part(wheels, i * 4 + k, k % 2 ? 0.87 : -0.87, k < 2 ? 1.38 : -1.34, 0.38, 0.22, 0.65, 0.65);
         for (let k = 0; k < 2; k++) {
@@ -279,7 +356,7 @@ export function traffic(scene, streets, terrain, start) {
           part(back, i * 2 + k, k ? 0.66 : -0.66, -L * 0.5, 0.79, 0.32, 0.14, 0.07);
         }
         for (let k = 0; k < 2; k++) {
-          const fore = k ? -3.0 : 4.3,
+          const fore = k ? -3.25 - c.speed * 0.06 : 4.3,
             xx = c.x + dx * fore,
             yy = c.y + dy * fore;
           matrix(
@@ -288,32 +365,35 @@ export function traffic(scene, streets, terrain, start) {
             xx,
             terrain(xx, yy) + 0.14,
             -yy,
-            k ? 1.4 : 2.3,
+            k ? 0.95 : 2.3,
             1,
-            k ? 2.7 : 4.6,
+            k ? 2.6 + c.speed * 0.18 : 4.6,
             -a,
           );
         }
-        if (i % 3 === 0) part(taxiTop, i / 3, 0, -0.05, c.van ? 1.93 : 1.62, 0.53, 0.17, 0.23);
+        if (i % 3 === 0) part(taxiTop, i / 3, 0, -0.05, c.van ? 1.93 : 1.62, 0.65, 0.19, 0.26);
       });
       walkers.forEach((p, i) => {
-        p.t += p.dir * dt * p.speed;
+        if (p.waiting && time % 13 > 8.55 && time % 13 < 10.2) p.waiting = false;
+        if (!p.waiting) p.t += p.dir * dt * p.speed;
         if (p.t >= p.path.length) {
           p.t = p.path.length - 0.01;
           p.dir = -1;
+          if (i >= 58) p.waiting = true;
         }
         if (p.t < 0) {
           p.t = 0.01;
           p.dir = 1;
+          if (i >= 58) p.waiting = true;
         }
         const s = p.path.segments.find((q) => q.start + q.len >= p.t) || p.path.segments.at(-1),
-          x = s.x + s.dx * (p.t - s.start),
-          y = s.y + s.dy * (p.t - s.start),
+          x = s.x + s.dx * (p.t - s.start) + s.dy * (p.side || 0),
+          y = s.y + s.dy * (p.t - s.start) - s.dx * (p.side || 0),
           a = Math.atan2(s.dx * p.dir, s.dy * p.dir),
           dx = Math.sin(a),
           dy = Math.cos(a),
-          z = terrain(x, y),
-          stride = Math.sin(time * p.speed * 5 + p.seed),
+          z = terrain(x, y) + (i >= 58 && !p.waiting ? 0.09 : 0.18),
+          stride = p.waiting ? 0 : Math.sin(time * p.speed * 5 + p.seed),
           h = p.height;
         function part(mesh, j, side, fore, elev, w, H, d, pitch = 0) {
           matrix(
@@ -329,7 +409,7 @@ export function traffic(scene, streets, terrain, start) {
             pitch,
           );
         }
-        part(shirt, i, 0, 0, 1.08, 0.4, 0.62, 0.25);
+        part(shirt, i, 0, 0, 1.1, 0.46, 0.66, 0.34);
         part(head, i, 0, 0, 1.56, 0.23, 0.3, 0.23);
         part(hair, i, 0, -0.012, 1.64, 0.245, 0.18, 0.235);
         for (let k = 0; k < 2; k++) {
@@ -339,16 +419,17 @@ export function traffic(scene, streets, terrain, start) {
             i * 2 + k,
             sign * 0.105,
             sign * stride * 0.12,
-            0.42,
-            0.14,
+            0.45,
+            0.174,
             0.78,
             0.16,
             -sign * stride * 0.32,
           );
+          part(shoes, i * 2 + k, sign * 0.105, 0.06 + sign * stride * 0.195, 0.065, 0.14, 0.105, 0.235);
           part(
             arms,
             i * 2 + k,
-            sign * 0.25,
+            sign * 0.235,
             -sign * stride * 0.09,
             1.07,
             0.115,

@@ -4,6 +4,8 @@ import compressedDistrict from '../assets/shiba-park.glb';
 import { gunzipSync } from 'three/addons/libs/fflate.module.js';
 import vehicleBytes from '../assets/solano-gt.glb';
 import data from '../assets/shiba-layout.json';
+import gateSupports from '../assets/shiba-gate-supports.json';
+import { furnishAvenue } from './shiba/avenue.js';
 import { createLighting } from './shiba/lighting.js';
 import { createTrees, makeStreets } from './shiba/street.js';
 import { createHud } from './shiba/hud.js';
@@ -39,21 +41,22 @@ function terrain(x, y) {
     b = fy - j,
     n = j * g.w + i;
   return (
-    ((g.cm[n] * (1 - a) + g.cm[n + 1] * a) * (1 - b) +
-      (g.cm[n + g.w] * (1 - a) + g.cm[n + g.w + 1] * a) * b) /
+    ((g.cm[n] * (1 - a) + g.cm[n + 1] * a) * (1 - b) + (g.cm[n + g.w] * (1 - a) + g.cm[n + g.w + 1] * a) * b) /
     100
   );
 }
-const footprints = data.footprints.map((p) => ({ ...p, box: boundsOf(p.rings[0]) }));
-const gates = [data.verifiedBuildings['三解脱门'], data.verifiedBuildings['增上寺大门']];
+const footprints = data.footprints.flatMap((f) =>
+  (gateSupports[f.id] || [null]).map((support) => {
+    const rings = support ? [support] : f.rings;
+    return { id: f.id, rings, box: boundsOf(rings[0]) };
+  }),
+);
 function passable(x, y) {
   if (!inside(x, y, data.boundary)) return false;
   for (const f of footprints) {
     const [a, b, c, d] = f.box;
     if (x < a || x > c || y < b || y > d) continue;
     if (inside(x, y, f.rings[0]) && !f.rings.slice(1).some((h) => inside(x, y, h))) {
-      const gate = gates.indexOf(f.id);
-      if (gate >= 0 && Math.abs(y - data.pins[gate + 2][2]) < 2.2) continue;
       return false;
     }
   }
@@ -87,10 +90,12 @@ async function create() {
   batchCar(car);
   scene.add(district, car);
   car.visible = false;
-  const lighting = createLighting(renderer, scene, district, car);
+  const lighting = createLighting(renderer, scene, district, car, data.height);
   const streets = makeStreets(scene, data, terrain, district);
   createTrees(scene, data.trees);
-  const furniture = buildFurniture(scene, streets, terrain, data, lighting.texture);
+  const furniture = buildFurniture(scene, streets, terrain, data, lighting.texture, passable);
+  const avenue = furnishAvenue(scene, streets, terrain, passable);
+  canvas.dataset.avenue = JSON.stringify(avenue.inventory);
   const actors = traffic(scene, streets, terrain, data.startWalk);
   const driving = createDriving(car, terrain, passable, footprints, data.boundary, streets);
   const hud = createHud(data);
@@ -299,6 +304,7 @@ async function create() {
     }
     dark = lighting.update(dt, now / 1000, camera, state, ground);
     furniture(now / 1000, dark);
+    avenue.update(dark);
     actors.update(dt, now / 1000, dark, state);
     hud.draw(state, now);
     renderer.render(scene, camera);

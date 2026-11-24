@@ -10,6 +10,8 @@ from mathutils import Vector
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from tower import make_tower
+from foundations import foundation_mesh
+from gates import make_gate, PALETTE
 
 CACHE = Path(sys.argv[sys.argv.index("--") + 1])
 DEST = HERE.parents[1] / "assets"
@@ -34,6 +36,37 @@ for fid, title, arr in [
     blocks.append(("Backdrop", fid, title, (v, f, uv, mi)))
 blocks.append(
     ("Tower", "tower-lattice", "東京タワー · 鉄骨と展望台", make_tower(names))
+)
+
+
+foundation_index = len(names)
+names.append("Foundation concrete")
+for mat_name in PALETTE:
+    if mat_name not in names:
+        names.append(mat_name)
+gate_ids = {
+    layout["verifiedBuildings"]["三解脱门"]: "sangedatsumon-gate",
+    layout["verifiedBuildings"]["增上寺大门"]: "daimon-gate",
+}
+supports = {}
+for i, (group, fid, label, arr) in enumerate(list(blocks)):
+    if group == "Building" and fid in gate_ids:
+        reconstructed, supports[fid] = make_gate(
+            arr, gate_ids[fid] == "sangedatsumon-gate", names
+        )
+        blocks.append(("Reference", fid, label + " · PLATEAU LOD2", arr))
+        blocks[i] = (group, fid, label + " · 建築復元", reconstructed)
+(DEST / "shiba-gate-supports.json").write_text(
+    json.dumps(supports, separators=(",", ":"))
+)
+survey_ids = {b[1] for b in blocks if b[0] == "Building"} - gate_ids.keys()
+blocks.append(
+    (
+        "Terrain",
+        "building-foundations",
+        "建物 · 接地基礎",
+        foundation_mesh(CACHE, survey_ids, layout["height"], foundation_index),
+    )
 )
 
 
@@ -153,6 +186,7 @@ def rgb(h):
 
 colors = {
     "Warm plaster": "b3aba0",
+    **PALETTE,
     "Roof": "676b6c",
     "Glass": "64828e",
     "Ivory steel": "eff0e7",
@@ -192,6 +226,23 @@ for idx, name in enumerate(names):
         if name == "Deck glazing":
             bs.inputs["Roughness"].default_value = 0.35
             bs.inputs["Metallic"].default_value = 0.22
+    if name == "Gate inscription":
+        tex = nt.nodes.new("ShaderNodeTexImage")
+        tex.image = bpy.data.images.load(
+            str(CACHE / "gate-lettering.png"), check_existing=True
+        )
+        nt.links.new(tex.outputs["Color"], bs.inputs["Base Color"])
+    if name == "Warm plaster":
+        for filename, socket in [
+            ("office-albedo.png", "Base Color"),
+            ("office-emission.png", "Emission Color"),
+        ]:
+            tex = nt.nodes.new("ShaderNodeTexImage")
+            tex.image = bpy.data.images.load(str(CACHE / filename), check_existing=True)
+            nt.links.new(tex.outputs["Color"], bs.inputs[socket])
+        bs.inputs["Emission Strength"].default_value = 0.18
+        bs.inputs["Roughness"].default_value = 0.58
+        bs.inputs["Metallic"].default_value = 0.16
     mats.append(mat)
 
 collections = {}
@@ -221,8 +272,20 @@ def make(name, arr, collection, center=True):
         me.materials.append(mats[idx])
     me.polygons.foreach_set("material_index", local.astype("i4"))
     u = me.uv_layers.new(name="Survey UV")
+    loop_uv = uv[f].copy()
+    blank = np.flatnonzero(mi == names.index("Warm plaster"))
+    if len(blank):
+        faces = v[f[blank]]
+        n = np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0])
+        tangent = np.column_stack([-n[:, 1], n[:, 0]])
+        tangent /= np.linalg.norm(tangent, axis=1).clip(1e-8)[:, None]
+        tangent[tangent[:, 0] < 0] *= -1
+        loop_uv[blank, :, 0] = (
+            np.sum(faces[:, :, :2] * tangent[:, None, :], axis=2) / 19.2
+        )
+        loop_uv[blank, :, 1] = faces[:, :, 2] / 26.4
     u.data.foreach_set(
-        "uv", np.ascontiguousarray(uv[f].reshape(-1, 2), dtype="f4").ravel()
+        "uv", np.ascontiguousarray(loop_uv.reshape(-1, 2), dtype="f4").ravel()
     )
     me.update(calc_edges=True)
     ob = bpy.data.objects.new(name, me)
@@ -245,6 +308,8 @@ for group, fid, label, arr in blocks:
     ob["feature_id"] = fid
     if group == "Building":
         ob["survey_lod"] = 2
+        if fid in gate_ids:
+            ob["reconstruction"] = gate_ids[fid]
 coll(groups["Reference"]).hide_render = True
 coll(groups["Reference"]).hide_viewport = True
 laser = np.load(CACHE / "tower-laser.npy")
@@ -346,6 +411,11 @@ if "--runtime-only" not in sys.argv:
     bpy.ops.wm.save_as_mainfile(
         filepath=str(DEST / "芝公园与东京塔.blend"), compress=True, relative_remap=False
     )
+# WebGL builds the same chart in Canvas, shared by all buildings. Keep it packed only in the authoring file.
+author_wall = mats[names.index("Warm plaster")]
+for node in list(author_wall.node_tree.nodes):
+    if node.type == "TEX_IMAGE":
+        author_wall.node_tree.nodes.remove(node)
 # The distant skyline is viewed across hundreds of metres. Keep the full atlas
 # inside Blender and use a smaller baked copy in the interactive renderer.
 for material in mats:
@@ -363,7 +433,7 @@ for group, fid, label, arr in blocks:
         continue
     v, f, uv, mi = arr
     if group == "Building":
-        key = "Survey buildings"
+        key = gate_ids.get(fid, "Survey buildings")
     else:
         key = fid
     batches[key].append(arr)
