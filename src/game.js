@@ -1,3 +1,4 @@
+import {visitShiba} from './shiba.js';
 import {StreetRadio} from './street-radio.js';
 import {loadStudio} from './blender-assets.js';
 import {LedgerChapter} from './chapter.js';
@@ -92,6 +93,12 @@ function refreshMenu(){
  $('edition').innerHTML=next?'<i></i>CHAPTER 02 <em>/</em> 午夜暗频':'<i></i>CHAPTER 01 <em>/</em> 海浪账本';
  if(next){$('story').querySelector('span').textContent=save.midnight.outcome?'回到午夜街区':save.midnight.stage==='new'?'进入午夜暗频':'继续午夜暗频';$('tagline').textContent=demo?'独立试玩 · '+(sample==='return'?'乐手记得你归还的尾款。':'门房还记得你留下的现金。'):save.midnight.outcome?'午夜过后，街上的电台还在播放你的选择。':'午夜的一个空频段，两个人都想让全城听见。'}
  if(replay){$('story').querySelector('span').textContent='开始后院回放';$('tagline').textContent='重演火烈鸟之夜。回放使用独立进度。'}
+ if(!replay&&!demo){
+  $('firstArt').hidden=false;$('secondArt').hidden=true;
+  $('edition').innerHTML='<i></i>東京都 <em>/</em> 港区';
+  $('tagline').textContent='从芝公园到东京塔，沿增上寺门前的街道走到大门。';
+  $('story').querySelector('span').textContent='东京湾 · 原作剧情';
+ }
  document.querySelectorAll('.sound').forEach(b=>{b.innerHTML=icon(save.sound?'audio':'off');b.setAttribute('aria-label',save.sound?'关闭声音':'打开声音');b.setAttribute('aria-pressed',String(save.sound))});
 }
 let photoYaw=-.75,photoHeight=2.6,photoRadius=6.3,dragPoint=null;
@@ -125,6 +132,15 @@ async function enter(story){
  else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();if(save.chapter.stage==='new'&&!save.walker&&!save.fleet)sim.placeOnFoot(148.45,54.85,.63);toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
  chapter.update(0);
  updateHUD();sim.update(0,keys,target());sim.render();$('worldview').classList.remove('arrival');requestAnimationFrame(()=>$('worldview').classList.add('arrival'));
+}
+async function enterShiba(){
+ if(opening)return;
+ opening=true;screen='shiba-loading';$('loading').hidden=false;
+ try{
+  await visitShiba(()=>{screen='menu';$('menu').hidden=false;$('roam').focus()});
+  screen='shiba';$('menu').hidden=true;
+ }catch(err){console.warn('Shiba scene:',err.message);screen='menu';showPanel('error')}
+ finally{opening=false;$('loading').hidden=true}
 }
 function backMenu(){streetRadio?.stop(false);if(demo){const u=new URL(location.href);u.searchParams.delete('sample');location.assign(u.href);return}if(replay){replayLocation(false);return}chapter?.close();drift.reset();closePanel();stopRace();rewardUntil=0;screen='menu';persist();$('worldview').hidden=true;$('menu').hidden=false;refreshMenu();audio.update(false,save,0,false,false);$('story').focus()}
 function finishStep(dt){
@@ -266,7 +282,7 @@ $('panelbody').addEventListener('click',e=>{
  if(act==='rescue'){if(save.chapter.active&&save.chapter.stage==='escape'){closePanel();toast('警戒中。玛拉提醒你可以找门房核对母带。');return}if(race.active||save.cab){closePanel();toast('请先在调度中结束当前活动再呼叫救援');return}sim.rescue();persist();closePanel()}
  if(act==='view'){changeView();closePanel()}
 });
-$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>chapter.action();$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
+$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>chapter.action();$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=enterShiba;$('legacyRoam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
 $('missionbtn').onclick=()=>{if(save.mission>=0)selectedJob=save.mission;showPanel(race?.active?'race':save.cab?'cab':'jobs')};$('minimapbtn').onclick=()=>showPanel('map');$('radio').onclick=toggleRadio;$('touchF').onclick=interact;
 $('nextjob').onclick=()=>{rewardUntil=0;if(rewardMode==='race')startRace();else if(rewardMode==='cab')startFare();else beginJob(selectedJob)};$('rewardpaint').onclick=()=>{rewardUntil=0;showPanel('garage')};$('cruise').onclick=()=>{rewardUntil=0;updateHUD()};
 $('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closePanel()});
@@ -290,6 +306,7 @@ $('shutter').onclick=()=>{redrawPhoto();const original=$('scene'),post=document.
 const mapped={ArrowUp:'KeyW',ArrowDown:'KeyS',ArrowLeft:'KeyA',ArrowRight:'KeyD',ShiftRight:'ShiftLeft'};
 function keyCode(e){return mapped[e.code]||e.code}
 window.addEventListener('keydown',e=>{
+ if(screen==='shiba'||screen==='shiba-loading')return;
  if(e.metaKey||e.ctrlKey||e.altKey)return;
  if(!panel&&screen==='play'&&streetRadio?.mode==='setup'&&['SELECT','INPUT'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','Space'].includes(e.code))return;
  if(chapter?.talk&&!panel){
@@ -303,7 +320,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Tab'){const list=[...$('overlay').querySelectorAll('button:not(:disabled)')];if(e.shiftKey&&document.activeElement===list[0]){e.preventDefault();list.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===list.at(-1)){e.preventDefault();list[0].focus()}}
   if(['Escape','KeyP'].includes(e.code)||(panel==='map'&&e.code==='KeyM')||(panel==='jobs'&&e.code==='KeyJ')){e.preventDefault();if(!e.repeat)closePanel()}return
  }
- if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enter(true)}return}
+ if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();if(replay||demo)enter(true);else enterShiba()}return}
  const k=keyCode(e);if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft'].includes(k)){e.preventDefault();keys.add(k);return}
  if(e.repeat)return;
  switch(k){case 'KeyB':streetRadio.toggle();break;case 'KeyE':if(chapter.nearby())chapter.action();else if(!sim.inCar&&sim.nearCar())interact();break;case 'KeyG':showPanel('garage');break;case 'KeyV':openPhoto();break;case 'KeyF':interact();break;case 'KeyM':showPanel('map');break;case 'KeyJ':$('missionbtn').click();break;case 'KeyR':toggleRadio();break;case 'KeyC':changeView();break;case 'KeyP':case 'Escape':e.preventDefault();showPanel('pause');break}

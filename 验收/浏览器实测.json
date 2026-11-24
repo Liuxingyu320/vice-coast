@@ -1,0 +1,108 @@
+[
+  {
+    "kind": "chrome",
+    "width": 1280,
+    "height": 800,
+    "samples": [
+      {
+        "name": "dusk-walk",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.8,
+        "maxDraw": 81,
+        "frames": 253,
+        "pose": "30.75,-323.84,-0.095",
+        "fov": "55.00"
+      },
+      {
+        "name": "night-drive",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.7,
+        "maxDraw": 111,
+        "frames": 253,
+        "pose": "51.49,-254.27,0.308",
+        "fov": "58.32"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.8,
+        "maxDraw": 76,
+        "frames": 156,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "peakDrawCalls": 116,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "ok": true
+  },
+  {
+    "kind": "landscape",
+    "width": 844,
+    "height": 390,
+    "samples": [
+      {
+        "name": "night-drive",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 18,
+        "maxDraw": 115,
+        "frames": 60,
+        "pose": "37.35,-298.72,0.308",
+        "fov": "58.84"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 17,
+        "maxDraw": 76,
+        "frames": 39,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "peakDrawCalls": 116,
+    "renderer": "Apple GPU",
+    "ok": true
+  },
+  {
+    "kind": "portrait",
+    "width": 390,
+    "height": 844,
+    "samples": [
+      {
+        "name": "night-drive",
+        "fps": 60.3,
+        "medianMs": 17,
+        "p95Ms": 18,
+        "maxDraw": 106,
+        "frames": 61,
+        "pose": "37.45,-298.41,0.308",
+        "fov": "58.87"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60.2,
+        "medianMs": 17,
+        "p95Ms": 18,
+        "maxDraw": 76,
+        "frames": 40,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "peakDrawCalls": 110,
+    "renderer": "Apple GPU",
+    "ok": true
+  }
+]
