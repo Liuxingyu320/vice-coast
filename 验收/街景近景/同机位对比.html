@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>芝公园与大门 · 街景对比</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101318;color:#f1eee9;font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px clamp(14px,4vw,52px) 56px}h1{font-size:clamp(26px,4vw,42px);font-weight:650;margin:0}p{color:#bec4ce;margin:4px 0 28px}section{margin:30px 0 48px}header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:9px}h2{font-size:20px;margin:0}a{color:#ffc08c;text-underline-offset:.2em;font-size:14px}figure{margin:0;position:relative;aspect-ratio:8/5;overflow:hidden;background:#20252d;touch-action:pan-y;cursor:ew-resize;--cut:50%}figure img{display:block;width:100%;height:100%;object-fit:contain;position:absolute;inset:0;pointer-events:none}.prior{clip-path:inset(0 calc(100% - var(--cut)) 0 0)}figure::after{content:"";position:absolute;top:0;bottom:0;left:var(--cut);width:2px;background:#fff;box-shadow:0 0 3px #111}label{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:13px;color:#cbd0d8}input{flex:1;min-width:0;accent-color:#ffac70}
+</style>
+<main><h1>芝公园与大门</h1><p>拖动分界线，在同一机位比较两版 Playwright 实测画面。原图为 1440 × 900。</p>
+</main>
+<script>
+for(const [file,label] of [['芝公园步行','芝公园 · 黄昏步行'],['大门路口','大门交差点 · 临街首层'],['初夜驾驶','东京塔方向 · 初夜驾驶']]){
+ const section=document.createElement('section');
+ section.innerHTML=`<header><h2>${label}</h2><a href="${file}.png">打开修复后原图</a></header><figure><img alt="${label}修复后" src="${file}.png"><img class="prior" alt="${label}修复前" src="修复前/${file}.png"></figure><label>修复前<input type="range" value="50" aria-label="${label}的修复前后分界线">修复后</label>`;
+ document.querySelector('main').append(section);
+ const control=section.querySelector('input'),frame=section.querySelector('figure');
+ control.oninput=()=>frame.style.setProperty('--cut',control.value+'%');
+ const move=e=>{const rect=frame.getBoundingClientRect();control.value=(e.clientX-rect.left)*100/rect.width;control.oninput()};
+ frame.onpointerdown=e=>{frame.setPointerCapture(e.pointerId);move(e)};
+ frame.onpointermove=e=>{if(frame.hasPointerCapture(e.pointerId))move(e)};
+}
+</script></html>

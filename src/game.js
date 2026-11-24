@@ -1,3 +1,4 @@
+import {visitShiba} from './shiba.js';
 import {StreetRadio} from './street-radio.js';
 import {loadStudio} from './blender-assets.js';
 import {LedgerChapter} from './chapter.js';
@@ -134,6 +135,15 @@ function mixUI(phase,hits,feedback){$('mixdesk').hidden=false;$('track').lastEle
 function hideTalk(){
  resetControls();$('conversation').hidden=true;$('hud').hidden=false;updateHUD();
  ($('sceneAction').hidden?$('missionbtn'):$('sceneAction')).focus({preventScroll:true});
+}
+async function enterShiba(){
+ if(opening)return;
+ opening=true;screen='shiba-loading';$('loading').hidden=false;
+ try{
+  await visitShiba(()=>{screen='menu';$('menu').hidden=false;$('roam').focus()});
+  screen='shiba';$('menu').hidden=true;
+ }catch(err){console.warn('Shiba scene:',err.message);screen='menu';showPanel('error')}
+ finally{opening=false;$('loading').hidden=true}
 }
 async function enter(story){
  if(opening)return;opening=true;audio.init();$('loading').hidden=false;
@@ -330,7 +340,7 @@ $('panelbody').addEventListener('click',e=>{
  if(act==='rescue'){if(race.active||save.cab){closePanel();toast('请先在调度中结束当前活动再呼叫救援');return}sim.rescue();persist();closePanel()}
  if(act==='view'){changeView();closePanel()}
 });
-$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>{if(shownSceneAction&&chapter.nearby()===shownSceneAction)chapter.action();else updateHUD()};$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
+$('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>{if(shownSceneAction&&chapter.nearby()===shownSceneAction)chapter.action();else updateHUD()};$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=enterShiba;$('legacyRoam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
 $('missionbtn').onclick=()=>{if(save.mission>=0)selectedJob=save.mission;showPanel(race?.active?'race':save.cab?'cab':'jobs')};$('minimapbtn').onclick=()=>showPanel('map');$('radio').onclick=toggleRadio;$('touchF').onclick=()=>{if(shownCarAction)interact(shownCarAction)};
 $('nextjob').onclick=()=>{rewardUntil=0;if(rewardMode==='race')startRace();else if(rewardMode==='cab')startFare();else if(rewardMode==='chapter')updateHUD();else beginJob(selectedJob)};$('rewardpaint').onclick=()=>{rewardUntil=0;showPanel('garage')};$('cruise').onclick=()=>{rewardUntil=0;updateHUD()};
 $('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closePanel()});
@@ -354,6 +364,7 @@ $('shutter').onclick=()=>{redrawPhoto();const original=$('scene'),post=document.
 const mapped={ArrowUp:'KeyW',ArrowDown:'KeyS',ArrowLeft:'KeyA',ArrowRight:'KeyD',ShiftRight:'ShiftLeft'};
 function keyCode(e){return mapped[e.code]||e.code}
 window.addEventListener('keydown',e=>{
+ if(screen==='shiba'||screen==='shiba-loading')return;
  if(e.metaKey||e.ctrlKey||e.altKey)return;
  if(!panel&&screen==='play'&&streetRadio?.mode==='setup'&&['SELECT','INPUT'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','Space'].includes(e.code))return;
  if(chapter?.talk&&!panel){
@@ -370,7 +381,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Tab'){const list=[...$('overlay').querySelectorAll('button:not(:disabled)')];if(e.shiftKey&&document.activeElement===list[0]){e.preventDefault();list.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===list.at(-1)){e.preventDefault();list[0].focus()}}
   if(['Escape','KeyP'].includes(e.code)||(panel==='map'&&e.code==='KeyM')||(panel==='jobs'&&e.code==='KeyJ')){if(e.code==='Escape'&&performance.now()-swallowEscape<200){swallowEscape=0;e.preventDefault();return}e.preventDefault();if(!e.repeat)closePanel()}return
  }
- if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enter(true)}return}
+ if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enterShiba()}return}
  const k=keyCode(e);if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft'].includes(k)){e.preventDefault();if(!e.repeat)keyboardHolds.set(e.code,k);return}
  if(e.repeat)return;
  switch(k){case 'KeyB':streetRadio.toggle();break;case 'KeyE':pressE();break;case 'KeyG':showPanel('garage');break;case 'KeyV':openPhoto();break;case 'KeyF':interact();break;case 'KeyM':showPanel('map');break;case 'KeyJ':$('missionbtn').click();break;case 'KeyR':toggleRadio();break;case 'KeyC':changeView();break;case 'KeyP':case 'Escape':e.preventDefault();showPanel('pause');break}

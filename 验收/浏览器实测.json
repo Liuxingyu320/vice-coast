@@ -1,0 +1,132 @@
+[
+  {
+    "kind": "chrome",
+    "width": 1280,
+    "height": 800,
+    "samples": [
+      {
+        "name": "dusk-walk",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.7,
+        "maxDraw": 97,
+        "frames": 253,
+        "pose": "30.75,-323.84,-0.095",
+        "fov": "55.00"
+      },
+      {
+        "name": "night-drive",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.8,
+        "maxDraw": 127,
+        "frames": 253,
+        "pose": "51.04,-255.68,0.308",
+        "fov": "58.20"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60,
+        "medianMs": 16.7,
+        "p95Ms": 16.7,
+        "maxDraw": 105,
+        "frames": 157,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "avenue": {
+      "frontages": 194,
+      "benches": 15,
+      "shelters": 4,
+      "bicycles": 27,
+      "gantries": 3,
+      "stoneLanterns": 4
+    },
+    "peakDrawCalls": 154,
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+    "ok": true
+  },
+  {
+    "kind": "landscape",
+    "width": 844,
+    "height": 390,
+    "samples": [
+      {
+        "name": "night-drive",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 18,
+        "maxDraw": 138,
+        "frames": 61,
+        "pose": "37.41,-298.52,0.308",
+        "fov": "58.84"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 17,
+        "maxDraw": 105,
+        "frames": 39,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "avenue": {
+      "frontages": 194,
+      "benches": 15,
+      "shelters": 4,
+      "bicycles": 27,
+      "gantries": 3,
+      "stoneLanterns": 4
+    },
+    "peakDrawCalls": 138,
+    "renderer": "Apple GPU",
+    "ok": true
+  },
+  {
+    "kind": "portrait",
+    "width": 390,
+    "height": 844,
+    "samples": [
+      {
+        "name": "night-drive",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 17,
+        "maxDraw": 122,
+        "frames": 60,
+        "pose": "37.35,-298.72,0.308",
+        "fov": "58.84"
+      },
+      {
+        "name": "day-overview",
+        "fps": 60,
+        "medianMs": 17,
+        "p95Ms": 17,
+        "maxDraw": 105,
+        "frames": 39,
+        "pose": "832.94,-181.11,2.947",
+        "fov": "55.00"
+      }
+    ],
+    "errors": [],
+    "pageErrors": [],
+    "avenue": {
+      "frontages": 194,
+      "benches": 15,
+      "shelters": 4,
+      "bicycles": 27,
+      "gantries": 3,
+      "stoneLanterns": 4
+    },
+    "peakDrawCalls": 126,
+    "renderer": "Apple GPU",
+    "ok": true
+  }
+]
