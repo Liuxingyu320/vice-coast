@@ -7,6 +7,8 @@ export class CoastAudio{
   try{const c=this.ctx=new Audio();this.master=c.createGain();this.master.gain.value=.46;this.master.connect(c.destination);
    this.motor=c.createOscillator();this.motor.type='sawtooth';this.filter=c.createBiquadFilter();this.filter.type='lowpass';this.filter.frequency.value=175;
    this.motorLevel=c.createGain();this.motorLevel.gain.value=0;this.motor.connect(this.filter).connect(this.motorLevel).connect(this.master);this.motor.start();
+   this.siren=c.createOscillator();this.siren.type='triangle';this.siren.frequency.value=630;
+   this.sirenLevel=c.createGain();this.sirenLevel.gain.value=0;this.siren.connect(this.sirenLevel).connect(this.master);this.siren.start();
    this.noise=c.createBuffer(1,Math.floor(c.sampleRate*.25),c.sampleRate);const arr=this.noise.getChannelData(0);
    for(let i=0;i<arr.length;i++)arr[i]=(Math.random()-.5)*2;
   }catch{this.ctx=null}
@@ -33,10 +35,13 @@ export class CoastAudio{
   }
  }
  cue(){if(this.ctx)this.tone(this.ctx.currentTime,115,.14,.11,'sine',43)}
- update(active,save,speed,gas,driving,track=null){
+ update(active,save,speed,gas,driving,track=null,patrolDistance=Infinity){
   if(!this.ctx)return;const c=this.ctx,t=c.currentTime;
   this.master.gain.setTargetAtTime(save.sound?.46:0,t,.04);this.motorLevel.gain.setTargetAtTime(active&&driving?(gas?.047:.02):0,t,.06);
   this.motor.frequency.setTargetAtTime(32+(Math.abs(speed)%14)*2.7+(gas?9:0),t,.09);
+  const siren=active&&save.sound?Math.max(0,1-patrolDistance/68):0;
+  this.sirenLevel.gain.setTargetAtTime(.085*siren*siren,t,.10);
+  if(siren>0)this.siren.frequency.setTargetAtTime(685+235*Math.sin(t*5.2),t,.04);
   if(!active||!save.sound||(!save.radio&&!track)||!driving){this.next=t;return}
   if(this.next<t)this.next=t+.02;
   const show=track??save.midnight?.outcome;

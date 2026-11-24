@@ -5,12 +5,14 @@ import {makeMidnightSet} from '../src/midnight-set.js';
 import {Simulation} from '../src/simulation.js';
 import {additions, streetResidents} from '../src/street-catalog.js';
 import {createWorld} from '../src/world.js';
+import {checkVehicleCollision} from './vehicle-collision.js';
 
 function check(ok, message) {
  if (!ok) throw new Error(message);
 }
 
 async function checkCity() {
+ checkVehicleCollision(check);
  await loadStudio();
  const scene = new Scene();
  const world = createWorld(scene);
@@ -66,7 +68,7 @@ async function checkCity() {
  const moved = sim.parkedStreetCar(favorite.key).position;
  check(moved.z !== favorite.z && save.pin.x === moved.x && save.pin.z === moved.z, 'Car pin did not follow relocated vehicle');
  return [xs.length*zs.length+' intersections', world.colliders.length+' collision bounds',
-         sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations'].join(', ');
+         sim.walkers.length+' pedestrian routes', additions.length+' vehicle locations', 'vehicle collision regressions'].join(', ');
 }
 
 const result = document.querySelector('#result');

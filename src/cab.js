@@ -26,7 +26,7 @@ export class CabShift {
   }
   this.guest.visible=false;f.seconds+=dt;
   if(sim.impactSerial!==this.impact){f.bumps++;f.comfort=Math.max(0,f.comfort-15);this.impact=sim.impactSerial;sim.notify('碰撞 · 乘客舒适度 −15',2)}
-  if(Math.abs(sim.speed)>12&&(keys.has('Space')||Math.abs(sim.smoothSteer)>.78))f.comfort=Math.max(0,f.comfort-dt*(keys.has('Space')?8:3));
+  if(Math.abs(sim.speed)>12&&Math.abs(sim.smoothSteer)>.78)f.comfort=Math.max(0,f.comfort-dt*3);
   if(this.hold<.7)return null;
   const pay=farePay(f);this.exit={x:doorX,z:doorZ,to:p,t:0};this.hold=0;this.save.cab=null;this.sign.removeFromParent();
   return {...pay,...f,guestName:guests[f.guest].name};

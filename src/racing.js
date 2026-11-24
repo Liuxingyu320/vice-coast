@@ -63,19 +63,33 @@ export class StreetRace{
   const p=at(start),q=at(end),dx=q.x-p.x,dz=q.z-p.z;const t=clamp(((pos.x-p.x)*dx+(pos.z-p.z)*dz)/(dx*dx+dz*dz||1),0,.9999);
   return Math.floor(this.passed/gates.length)*length+start+(end-start)*t;
  }
+ resolveContact(r,sim,dt,rivalSpeed){
+  r.contact=Math.max(0,r.contact-dt);
+  const hit=sim.boxPush(sim.meshBox(r.car),sim.playerBox());
+  if(!hit)return;
+  const p=sim.pos,offset=hit.overlap+.01;
+  const x=p.x+hit.nx*offset,z=p.z+hit.nz*offset;
+  if(!sim.carBlocked(x,z,p.a,0,0)){p.x=x;p.z=z;sim.syncCar()}
+  const rivalA=r.car.rotation.y;
+  const vx=Math.sin(rivalA)*rivalSpeed-Math.sin(sim.motionA)*sim.speed;
+  const vz=Math.cos(rivalA)*rivalSpeed-Math.cos(sim.motionA)*sim.speed;
+  if(r.contact===0&&vx*hit.nx+vz*hit.nz< -4){sim.speed*=.82;sim.shake=Math.max(sim.shake,.5);r.contact=.85}
+ }
  update(dt,sim){
   if(this.countdown>0){this.countdown=Math.max(0,this.countdown-dt);return null}
-  this.time+=dt;const max=this.track.length*this.spec.laps,progress=this.progress(sim.pos);this.draft=false;
+  this.time+=dt;const max=this.track.length*this.spec.laps;this.draft=false;
   for(const r of this.cars){
+   const before=r.s;
    if(!r.finished){const here=this.track.at(r.s),ahead=this.track.at(r.s+9),bend=1-Math.abs(here.dx*ahead.dx+here.dz*ahead.dz);
     const target=this.spec.pace*r.pace*(1-.43*bend)*(1+.022*Math.sin(r.s*.043+r.lane));r.v+=clamp(target-r.v,-12*dt,6*dt);
     r.s+=r.v*dt;if(r.s>=max)r.finished=this.time-(r.s-max)/Math.max(1,r.v);this.place(r);
    }else if(r.s<max+14){r.s+=dt*4;this.place(r)}
+   this.resolveContact(r,sim,dt,dt>0?(r.s-before)/dt:0);
    const dx=r.car.position.x-sim.pos.x,dz=r.car.position.z-sim.pos.z,forward=-Math.sin(sim.pos.a)*dx-Math.cos(sim.pos.a)*dz,lateral=Math.abs(Math.cos(sim.pos.a)*dx-Math.sin(sim.pos.a)*dz);
    r.trail.visible=forward>3.2&&forward<16&&lateral<2.7&&sim.speed>8&&Math.cos(sim.pos.a-r.car.rotation.y)>.75;if(r.trail.visible)this.draft=true;
-   r.contact=Math.max(0,r.contact-dt);if(Math.abs(forward)<3.6&&lateral<1.7&&sim.speed>4&&r.contact===0){sim.speed*=.82;sim.shake=.5;r.contact=.85}
   }
   if(this.draft)sim.boost=Math.min(1,sim.boost+dt*.16);
+  const progress=this.progress(sim.pos);
   this.rank=1+this.cars.filter(r=>r.s>progress).length;
   const g=this.target,p=sim.pos,dx=p.x-g.x,dz=p.z-g.z,along=dx*g.dx+dz*g.dz,across=Math.abs(dx*g.dz-dz*g.dx);
   const before=this.previous?((this.previous.x-g.x)*g.dx+(this.previous.z-g.z)*g.dz):-1;

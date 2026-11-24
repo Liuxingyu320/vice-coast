@@ -79,8 +79,10 @@ export function createVenues(scene,colliders,footprints){
   for(let j=0;j<20;j++)b(143.81,3.37,44.47+j,2.35,.12,1,j%2?0xf2d5b0:0xba655b,0,0,-.095);
   for(const zz of [52.04,56.05]){b(143.78,1.78,zz,.24,3.2,.18,0x735446);b(143.89,1.73,zz,.16,2.95,.055,brass)}
   const door=new T.MeshStandardMaterial({color:0x91b6b7,transparent:true,opacity:.31,side:T.DoubleSide});
-  geo.add(plane,142.05,1.72,55.93,1.8,2.89,1,0xffffff,0,.1,0,door);
-  b(142.1,1.24,55.88,.5,.06,.09,brass);
+  // Hinged on the north jamb and swung into the shop, so the threshold reads open.
+  geo.add(plane,142.30,1.72,56.985,1.8,2.89,1,0xffffff,0,-Math.PI/2-.28,0,door);
+  b(142.02,1.24,57.62,.09,.06,.3,brass);
+  colliders.push({x:142.28,z:57.02,w:.32,d:.78});
   for(const zz of [46.5,61.6]){
    print(143.80,4.75,zz,3.2,.69,east,letterPanel(zz<50?'33 RPM':'SIDE B','ANALOG SOUND','#234e50','#f3c092'));
    b(143.81,1.67,zz,.12,1.25,.95,wood);print(143.88,1.67,zz,.84,1.14,east,recordMats[zz<50?2:4]);

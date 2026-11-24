@@ -6,7 +6,7 @@ export class DriftChain{
  update(dt,sim,keys){
   const angle=Math.atan2(Math.sin(sim.pos.a-sim.motionA),Math.cos(sim.pos.a-sim.motionA));
   if(!sim.inCar||this.score>0&&sim.impactSerial!==this.impact){const lost=this.score>=20;this.reset();return lost?{lost:true}:null}
-  const sliding=sim.speed>7&&Math.abs(angle)>.13&&(keys.has('Space')||Math.abs(angle)>.32);
+  const sliding=sim.speed>7&&Math.abs(angle)>.32;
   if(sliding){
    const dir=Math.sign(angle);
    if(!this.score)this.impact=sim.impactSerial;

@@ -1,5 +1,5 @@
 import {xs,zs,tapes,route} from './data.js';
-export function paintMap(canvas,pos,target,save,footprints,big=false,race=null){
+export function paintMap(canvas,pos,target,save,footprints,big=false,race=null,patrols=[]){
  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
  const scale=big?Math.min(W/570,H/560):W/135;
  const cx=big?-14:pos.x,cz=big?0:pos.z-9;
@@ -15,6 +15,12 @@ export function paintMap(canvas,pos,target,save,footprints,big=false,race=null){
  if(target){const points=race?.active?[]:target.type==='chapter'&&Math.hypot(pos.x-target.x,pos.z-target.z)<42?[pos,target]:route(pos,target);const color=target.type==='chapter'?'#ffd08a':target.type==='cab'?'#ffca74':target.type==='pin'?'#7ed5ff':target.type==='race'?'#8af8d5':'#ff6998';ctx.strokeStyle=color;ctx.lineWidth=big?4:5;ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.stroke();
   ctx.fillStyle=color;ctx.strokeStyle='#fff1d5';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px(target.x),pz(target.z),big?6:8,0,Math.PI*2);ctx.fill();ctx.stroke()}
  for(let i=0;i<tapes.length;i++){if(save.tapes.includes(i))continue;const p=tapes[i],x=px(p.x),y=pz(p.z),size=big?4:5;ctx.fillStyle='#ffe19b';ctx.beginPath();ctx.moveTo(x,y-size);ctx.lineTo(x+size,y);ctx.lineTo(x,y+size);ctx.lineTo(x-size,y);ctx.fill()}
+ for(const patrol of patrols){
+  const x=px(patrol.x),y=pz(patrol.z),r=big?5:6;
+  ctx.fillStyle='#131b26';ctx.beginPath();ctx.arc(x,y,r+2,0,2*Math.PI);ctx.fill();
+  ctx.fillStyle='#ff4f6e';ctx.beginPath();ctx.arc(x,y,r,Math.PI/2,3*Math.PI/2);ctx.fill();
+  ctx.fillStyle='#70aaff';ctx.beginPath();ctx.arc(x,y,r,-Math.PI/2,Math.PI/2);ctx.fill();
+ }
  ctx.save();ctx.translate(px(pos.x),pz(pos.z));ctx.rotate(-pos.a);const k=big?1.2:1.5;ctx.scale(k,k);ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,4);ctx.lineTo(-6,7);ctx.closePath();ctx.lineWidth=2.3;ctx.strokeStyle='#19282e';ctx.stroke();ctx.fillStyle='#89ffe1';ctx.fill();ctx.restore();
 }
 
