@@ -1,0 +1,176 @@
+{
+  "chrome": "158.0.8127.37",
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+  "viewport": [
+    1440,
+    900
+  ],
+  "dpr": 1,
+  "streetBases": {
+    "bases": 710,
+    "maximumPositionErrorM": 0.000032
+  },
+  "freeWalkAndOverview": true,
+  "walk": {
+    "fps": 60,
+    "p95ms": 16.8,
+    "p99ms": 16.8,
+    "frames": 361,
+    "sceneFrames": 361,
+    "peakDrawCalls": 183,
+    "eye": [
+      422.0868677295705,
+      4.902598733997861,
+      152.3711211967706
+    ],
+    "fov": 55,
+    "direction": [
+      -0.8393695155980155,
+      0.1296341426196917,
+      -0.5278766952158529
+    ],
+    "travelledM": 19.91
+  },
+  "sample": "requestAnimationFrame, real time, 6 seconds per settled camera",
+  "views": [
+    {
+      "file": "qa-01-intersection-a.png",
+      "pin": "大门路口",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 116,
+      "eye": [
+        814,
+        3.8172,
+        200.8
+      ],
+      "fov": 65,
+      "direction": [
+        0.9655641642075972,
+        0.06568595071366537,
+        -0.25173637138269545
+      ]
+    },
+    {
+      "file": "qa-02-intersection-b.png",
+      "pin": "芝公园站",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 136,
+      "eye": [
+        66,
+        7.547599999999999,
+        217.6
+      ],
+      "fov": 63,
+      "direction": [
+        -0.4231403476656913,
+        0.07801297543129794,
+        -0.9026994083534748
+      ]
+    },
+    {
+      "file": "qa-03-slope-buildings.png",
+      "pin": "东京塔",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 139,
+      "eye": [
+        190.09,
+        12.68174,
+        -32.19
+      ],
+      "fov": 64,
+      "direction": [
+        -0.8647665790982472,
+        0.06089618277090941,
+        0.4984680717946207
+      ]
+    },
+    {
+      "file": "qa-04-street-facades.png",
+      "pin": "大门路口",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 150,
+      "eye": [
+        800.2,
+        3.7814000000000005,
+        202.1
+      ],
+      "fov": 68,
+      "direction": [
+        -0.6474088534958526,
+        0.462667604527323,
+        0.6056405403670848
+      ]
+    },
+    {
+      "file": "qa-05-landmark-axis.png",
+      "pin": "三解脱门",
+      "time": "dusk",
+      "eyeAboveDEM": 1.55,
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 188,
+      "eye": [
+        456,
+        4.44,
+        151
+      ],
+      "fov": 62,
+      "direction": [
+        -0.9473726956973185,
+        0.263935768385347,
+        -0.18117087407757482
+      ]
+    },
+    {
+      "file": "qa-06-night-overview.png",
+      "pin": "overview",
+      "time": "night",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 164,
+      "eye": [
+        748.2478225291384,
+        654.9868354137204,
+        761.2643863700787
+      ],
+      "fov": 55,
+      "direction": [
+        -0.4406349143615169,
+        -0.6518337710215367,
+        -0.6172143932228586
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}

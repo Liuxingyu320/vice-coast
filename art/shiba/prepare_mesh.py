@@ -11,6 +11,7 @@ from shapely.prepared import prep
 from shiba_site import geo
 from extract import geompolys, TOWER
 from photo import pixel
+from building_shells import close_roof, orient
 
 
 class Mesh:
@@ -22,7 +23,8 @@ class Mesh:
 
     def add(self, rings, uvs, mat):
         pts = np.concatenate(rings)
-        normal = np.cross(rings[0], np.roll(rings[0], -1, axis=0)).sum(0)
+        local = rings[0] - rings[0][0]
+        normal = np.cross(local, np.roll(local, -1, axis=0)).sum(0)
         drop = np.argmax(np.abs(normal))
         if abs(normal[drop]) < 1e-8:
             return
@@ -132,8 +134,11 @@ def main(cache):
     blocks = []
     count = Counter()
     identified = {}
+    roof_flags = {}
+    repaired_area, flipped = 0.0, 0
     for fid, name, level, surfaces in features:
         mesh = Mesh()
+        roles = []
         reference = Mesh()
         if not surfaces:
             continue
@@ -188,7 +193,17 @@ def main(cache):
                 )
                 if not keep:
                     continue
+            start = len(mesh.v)
             mesh.add(rings, uu, material)
+            roles.extend(
+                [{"RoofSurface": 1, "WallSurface": 2, "GroundSurface": 3}.get(role, 0)]
+                * (len(mesh.v) - start)
+            )
+        if fid != TOWER and mesh.f:
+            repaired_area += close_roof(mesh, roles, surfaces, 2)
+        if mesh.f:
+            flipped += orient(mesh, roles)
+            roof_flags[fid] = np.asarray(roles, dtype="u1")
         if not mesh.f:
             continue
         shape = next((q for q in layout["footprints"] if q["id"] == fid), None)
@@ -203,6 +218,11 @@ def main(cache):
             blocks.append(
                 ("Reference", fid, "東京タワー · PLATEAU LOD2", reference.pack())
             )
+    with (cache / "roof-flags.pkl").open("wb") as output:
+        pickle.dump(roof_flags, output, protocol=4)
+    print(
+        "Roof seam area closed", repaired_area, "faces reoriented", flipped, flush=True
+    )
     area = Polygon(layout["boundary"])
     terrain = Mesh()
     bounded = prep(area)

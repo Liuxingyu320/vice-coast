@@ -3,16 +3,16 @@ import * as T from 'three';
 
 const periods = {
   dusk: [
-    '#1A2245',
-    '#7E3F67',
-    '#FF8B42',
+    '#253956',
+    '#928597',
+    '#EAB181',
     '#FFD384',
     '#FFB067',
     2.85,
-    '#CA7E8C',
-    '#292533',
+    '#B4B3BB',
+    '#575451',
     1.15,
-    '#6B4C5E',
+    '#8E8286',
     0.00046,
     1.12,
     13,
@@ -21,15 +21,15 @@ const periods = {
   ],
   night: [
     '#070B19',
-    '#101D3E',
-    '#293966',
+    '#263950',
+    '#586278',
     '#CFDEFF',
     '#6E90FF',
     0.78,
-    '#283B6B',
-    '#131620',
-    0.85,
-    '#0D1326',
+    '#8a9ab5',
+    '#414752',
+    1.18,
+    '#233146',
     0.00056,
     1.24,
     28,
@@ -73,11 +73,11 @@ function skyMaterial() {
  float hash(vec2 p){return fract(sin(dot(p,vec2(37.31,91.17)))*42367.23);}
  float cloudnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
  void main(){vec3 d=normalize(ray);float h=max(0.,d.y);
- vec3 sky=mix(edge,mid,smoothstep(0.,.29,h));sky=mix(sky,top,smoothstep(.18,.89,h));
+ vec3 sky=mix(edge,mid,smoothstep(0.,.29,h));sky*=mix(vec3(.36,.43,.52),vec3(1.),smoothstep(-.98,0.,d.y));sky=mix(sky,top,smoothstep(.18,.89,h));
  vec2 cloudUV=d.xz/(.29+h)*vec2(3.1,9.8)+vec2(2.6,8.1);
  float layers=.57*cloudnoise(cloudUV)+.27*cloudnoise(cloudUV*2.12)+.16*cloudnoise(cloudUV*4.13);
  float cirrus=smoothstep(.48,.77,layers)*smoothstep(.0,.13,h)*(1.-smoothstep(.55,.96,h));
- sky=mix(sky,mix(mid,halo,.48),cirrus*(.135-.10*night));
+ sky=mix(sky,mix(mid,halo,.48),cirrus*(.052-.035*night));
  float s=max(dot(d,sun),0.);sky+=halo*(pow(s,24.)*.33+pow(s,220.)*.79+smoothstep(.9994,.99983,s)*2.5)*(1.-night*.81);
  gl_FragColor=vec4(sky,1.);
  #include <tonemapping_fragment>
@@ -113,21 +113,21 @@ export function createLighting(renderer, scene, district, car, height) {
   const light = new T.DirectionalLight(),
     hemi = new T.HemisphereLight();
   light.castShadow = true;
-  light.shadow.mapSize.set(1024, 1024);
+  light.shadow.mapSize.set(2048, 2048);
   Object.assign(light.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 2, far: 540 });
   light.shadow.bias = -0.00026;
-  light.shadow.normalBias = 0.12;
+  light.shadow.normalBias = 0.055;
   scene.add(light, light.target, hemi);
   scene.fog = new T.FogExp2();
   const eveningWindows = { value: 0 };
-  const finish = buildingFinish(eveningWindows, height);
+  const finish = buildingFinish(district, eveningWindows, height);
   const orange = [],
     glass = [],
     facades = [];
   district.traverse((o) => {
     if (!o.isMesh) return;
     o.receiveShadow = true;
-    if (o.parent?.name.endsWith('-gate')) o.castShadow = true;
+    if (o.parent?.name.endsWith('-gate') || o.parent?.name === 'Survey_buildings') o.castShadow = true;
     let region = o;
     while (region && !region.name.startsWith('brid_')) region = region.parent;
     if (region && o.material.name === 'Warm plaster') {
@@ -142,12 +142,15 @@ export function createLighting(renderer, scene, district, car, height) {
     }
     if (name === 'Ivory steel' || name === 'Antenna steel') o.castShadow = true;
     if (['Deck glazing', 'Warm windows'].includes(name)) glass.push(mat);
-    if (name === 'Warm plaster' || name.startsWith('Facade') || name.startsWith('Backdrop facade')) {
+    if (
+      ['Curtain wall', 'Ribbon office', 'Porcelain tile', 'Metal sash'].includes(name) ||
+      /^(Facade |Backdrop facade|Temple Facade|Tower Facade)/.test(name)
+    ) {
       mat.roughness = 0.68;
       mat.metalness = 0.13;
       if (!facades.includes(mat)) {
         facades.push(mat);
-        finish(mat, name === 'Warm plaster');
+        finish(mat);
       }
     }
   });
@@ -400,7 +403,10 @@ export function createLighting(renderer, scene, district, car, height) {
       m.emissiveIntensity = towerEnergy * 1.65;
     });
     eveningWindows.value = Math.pow(nightness, 4);
-    for (const m of facades) m.emissiveIntensity = 0.11 + nightness * 0.08;
+    for (const m of facades)
+      m.emissiveIntensity = ['Curtain wall', 'Ribbon office', 'Porcelain tile', 'Metal sash'].includes(m.name)
+        ? 1.45
+        : 0.115 + nightness * 0.065;
     flare.material.opacity = nightness * 0.8;
     beacon.material.opacity =
       (0.16 + 0.84 * (0.5 - 0.5 * Math.cos((time * 2 * Math.PI) / 1.2))) * (0.5 + 0.5 * nightness);
@@ -416,6 +422,7 @@ export function createLighting(renderer, scene, district, car, height) {
   }
   set('dusk');
   return {
+    evening: eveningWindows,
     set,
     update,
     get period() {

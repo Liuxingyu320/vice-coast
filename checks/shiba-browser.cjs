@@ -84,7 +84,7 @@ async function check(kind) {
         assert.ok(result.p95Ms <= 25, name + ' uneven frame pacing');
       }
     }
-    assert.equal(await canvas.getAttribute('data-actors'), '30,66');
+    assert.equal(await canvas.getAttribute('data-actors'), '0,0');
     report.avenue = JSON.parse(await canvas.getAttribute('data-avenue'));
     for (const [label, count] of Object.entries(report.avenue)) assert.ok(count > 0, 'Missing ' + label);
     assert.equal(await canvas.getAttribute('data-period'), 'dusk');

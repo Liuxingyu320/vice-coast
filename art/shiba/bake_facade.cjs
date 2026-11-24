@@ -1,4 +1,4 @@
-// Embed the same two Canvas charts in the editable Blender file for offline material preview.
+// Bake the live static street meshes and shared texture charts into the editable Blender scene.
 const { chromium } = require('playwright');
 const { build } = require('esbuild');
 const fs = require('node:fs/promises'),
@@ -8,7 +8,8 @@ const fs = require('node:fs/promises'),
     root = path.resolve(__dirname, '../..');
   if (!cache) throw Error('Pass the survey cache directory.');
   const bundle = await build({
-    stdin: { contents: "export {paintFacadeChart} from './src/shiba/facades.js'", resolveDir: root },
+    entryPoints: [path.join(__dirname, 'street_reference.js')],
+    loader: { '.jpg': 'dataurl' },
     bundle: true,
     format: 'iife',
     globalName: 'Facade',
@@ -18,18 +19,10 @@ const fs = require('node:fs/promises'),
   try {
     const page = await browser.newPage();
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
-    for (const emission of [false, true]) {
-      const data = await page.evaluate((emission) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 1024;
-        Facade.paintFacadeChart(emission)(canvas.getContext('2d'), 1024, 1024);
-        return canvas.toDataURL().split(',')[1];
-      }, emission);
-      await fs.writeFile(
-        path.join(cache, emission ? 'office-emission.png' : 'office-albedo.png'),
-        Buffer.from(data, 'base64'),
-      );
-    }
+    const { meshes, images } = await page.evaluate(() => Facade.streetReference());
+    await fs.writeFile(path.join(cache, 'street-reference.json'), JSON.stringify(meshes));
+    for (const [i, image] of images.entries())
+      await fs.writeFile(path.join(cache, 'street-chart-' + i + '.jpg'), Buffer.from(image, 'base64'));
     const lettering = await page.evaluate(() => {
       const canvas = document.createElement('canvas');
       canvas.width = 512;

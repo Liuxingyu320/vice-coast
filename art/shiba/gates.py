@@ -11,6 +11,8 @@ PALETTE = {
     "Foundation concrete": "525960",
     "Gate gilding": "ba9256",
     "Gate inscription": "efe9dd",
+    "Aged copper ridge": "728a80",
+    "Gate painted concrete": "694b41",
 }
 
 
@@ -26,17 +28,21 @@ def make_gate(arr, large, names):
     center = (a + b) * 0.5
     base = vertices[:, 2].min()
     vs, fs, ms, obstacles = [], [], [], []
-    red, timber, tile, plaster, stone, gold, letters = [names.index(k) for k in PALETTE]
+    red, timber, tile, plaster, stone, gold, letters, copper, concrete = [
+        names.index(k) for k in PALETTE
+    ]
 
     mapped = {}
 
     def world(x, y):
         return center + u * x + front * y
 
-    def shape(points, faces, mat):
+    def shape(points, faces, mat, reverse=False):
         begin = len(vs)
         vs.extend([(*world(x, y), base + z) for x, y, z in points])
         for face in faces:
+            if reverse:
+                face = face[::-1]
             for k in range(1, len(face) - 1):
                 fs.append([begin + face[0], begin + face[k], begin + face[k + 1]])
                 ms.append(mat)
@@ -90,16 +96,17 @@ def make_gate(arr, large, names):
                 for i in range(sides)
             ],
             mat,
+            True,
         )
 
     def block_collision(x, y, w, d):
         obstacles.append([world(a, b).round(3).tolist() for a, b in rect(x, y, w, d)])
 
     def post(x, y, h, r):
-        block_collision(x, y, 2.3 * r, 2.3 * r)
-        box(x, y, -1.12, 2.65 * r, 2.65 * r, 3.0, stone)
+        block_collision(x, y, 2.65 * r, 2.65 * r)
+        box(x, y, 0.19, 2.65 * r, 2.65 * r, 0.38, stone)
         drum(x, y, 0.28, 0.19, r * 1.35, r * 1.12, stone)
-        drum(x, y, 0.43, h - 0.43, r, r * 0.96, red)
+        drum(x, y, 0.43, h - 0.43, r, r * 0.96, red, 24)
         for z, w in [(h - 0.65, 2.7), (h - 0.4, 3.4), (h - 0.15, 3.9)]:
             box(x, y, z, w * r, 2.6 * r, 0.22, timber if w == 2.7 else red)
 
@@ -157,11 +164,54 @@ def make_gate(arr, large, names):
                         stone,
                     )
                 l, r = pt(0, j / cols), pt(0, (j + 1) / cols)
-                shape(
-                    [l, r, (*r[:2], r[2] - 0.25), (*l[:2], l[2] - 0.25)],
-                    [(0, 1, 2, 3)],
-                    timber,
-                )
+                lip = [(*p[:2], p[2] - 0.18) for p in [l, r]]
+                shape([l, r, lip[1], lip[0]], [(0, 1, 2, 3)], timber)
+
+                # The underside of an irimoya eave rises toward the outer tips.
+                # Exposed rafters and transverse battens follow that plane.
+                def soffit(p, t):
+                    return (
+                        x + (p[0] - x) * (1 - 0.23 * t),
+                        y + (p[1] - y) * (1 - 0.36 * t),
+                        p[2] - 0.18 - t * min(0.98, d * 0.075),
+                    )
+
+                shape([*lip, soffit(r, 1), soffit(l, 1)], [(0, 1, 2, 3)], timber)
+
+                def batten(p, q, r, s, depth):
+                    top = [p, q, r, s]
+                    lower = [(a, b, c - depth) for a, b, c in top]
+                    shape(
+                        top + lower,
+                        [
+                            (4, 7, 6, 5),
+                            (0, 4, 5, 1),
+                            (1, 5, 6, 2),
+                            (2, 6, 7, 3),
+                            (3, 7, 4, 0),
+                        ],
+                        red,
+                    )
+
+                if large and w > 18:
+                    end = pt(0, min(1, (j + 0.14) / cols))
+                    mid = tuple((np.array(l) + end) / 2)
+                    batten(
+                        soffit(l, 0.02),
+                        soffit(end, 0.02),
+                        soffit(end, 1),
+                        soffit(l, 1),
+                        0.052,
+                    )
+                    for t in [0.36, 0.67, 0.94]:
+                        batten(
+                            soffit(l, t),
+                            soffit(r, t),
+                            soffit(r, t + 0.023),
+                            soffit(l, t + 0.023),
+                            0.038,
+                        )
+                    box(mid[0], mid[1], mid[2] - 0.10, 0.080, 0.078, 0.094, red)
         # A raised gable above each hip creates the characteristic irimoya end profile.
         if large and w > 22 and rise < 4:
             for side in [-1, 1]:
@@ -184,8 +234,10 @@ def make_gate(arr, large, names):
                     [(0, 1, 2)],
                     plaster,
                 )
-        box(x, y, z - 0.14, w - 0.45, d - 0.45, 0.24, timber)
+        box(x, y, z - 0.18 - min(0.98, d * 0.075), w * 0.77, d * 0.64, 0.12, timber)
         box(x, y, z + rise + 0.09, w - d * 0.64 + 0.45, 0.48, 0.3, tile)
+        if large and w > 22:
+            box(x, y, z + rise + 0.252, w - d * 0.64 + 0.62, 0.52, 0.065, copper)
         for sign in [-1, 1]:
             box(x + sign * (w - d * 0.64) / 2, y, z + rise + 0.3, 0.45, 0.55, 0.5, tile)
 
@@ -203,8 +255,8 @@ def make_gate(arr, large, names):
         for side in [-1, 1]:
             x = side * 7.8
             box(x, 0, 3.15, 3.3, 8.8, 5.7, red)
-            box(x, 0, -1.08, 3.45, 8.92, 2.96, stone)
-            block_collision(x, 0, 3.3, 8.8)
+            box(x, 0, 0.20, 3.45, 8.92, 0.40, stone)
+            block_collision(x, 0, 3.45, 8.92)
             for face in [-1, 1]:
                 box(x, face * 4.42, 3.55, 2.97, 0.12, 2.52, timber)
                 for j in range(12):
@@ -247,6 +299,10 @@ def make_gate(arr, large, names):
                 box(x, side * 5.52, 12, 0.11, 0.12, 0.95, red)
         box(0, 0, 13.96, 18.1, 7.5, 4.75, red)
         for side in [-1, 1]:
+            for x in np.arange(-8.66, 8.70, 0.255):
+                box(x, side * 3.77, 13.25, 0.022, 0.045, 2.53, timber)
+            for h in [12.36, 12.53, 13.04, 15.54, 16.03]:
+                box(0, side * 3.87, h, 18.0, 0.22, 0.106, timber if h < 12.42 else red)
             for x in np.arange(-7.8, 8, 2.6):
                 box(x, side * 3.78, 14.14, 2.05, 0.16, 2.4, timber)
                 for k in range(7):
@@ -270,12 +326,12 @@ def make_gate(arr, large, names):
             # Wing gate, white infill, tiled connecting wall.
             x = side * 18.8
             box(x, -1.6, 2.1, 12, 3.5, 4.2, plaster)
-            box(x, -1.6, -1.18, 12.15, 3.66, 2.85, stone)
+            box(x, -1.6, 0.1225, 12.15, 3.66, 0.245, stone)
             for xx in [-3, 3]:
                 box(x + xx, 0.2, 2.15, 5.6, 0.16, 3.58, red)
                 for j in range(13):
                     box(x + xx - 2.52 + j * 0.42, 0.3, 2.12, 0.058, 0.06, 3.3, timber)
-            block_collision(x, -1.6, 12, 3.5)
+            block_collision(x, -1.6, 12.15, 3.66)
             roof(x, -1.6, 4.22, 13.1, 4.8, 1.2)
             for xx in [-4.8, 0, 4.8]:
                 box(x + xx, 0.19, 2.2, 0.28, 0.22, 4.4, timber)
@@ -283,18 +339,18 @@ def make_gate(arr, large, names):
         inscription(0, 4.156, 15.48, 2.14, 0.78, 0)
     else:
         for x in [-4.85, 4.85]:
-            block_collision(x, 0, 1.08, 1.08)
-            box(x, 0, -0.89, 1.28, 1.28, 3.44, stone)
-            box(x, 0, 3.62, 1.05, 1.05, 5.58, timber)
+            block_collision(x, 0, 1.28, 1.28)
+            box(x, 0, 0.415, 1.28, 1.28, 0.83, stone)
+            box(x, 0, 3.62, 1.05, 1.05, 5.58, concrete)
             box(x, 0.56, 3.34, 0.68, 0.10, 3.62, gold)
             inscription(x, 0.62, 3.34, 0.61, 3.54, 1)
             post(x, -4.12, 3.90, 0.33)
-            box(x, -2.1, 3.8, 0.38, 4.6, 0.38, timber)
+            box(x, -2.1, 3.8, 0.38, 4.6, 0.38, concrete)
             roof(x, -3, 4.13, 2.05, 5.5, 0.84)
-        box(0, 0, 5.28, 12.35, 0.85, 0.76, timber)
+        box(0, 0, 5.28, 12.35, 0.85, 0.76, concrete)
         box(0, 0, 6.11, 11.2, 0.73, 0.92, plaster)
         for x in [-4.85, 0, 4.85]:
-            box(x, 0, 6.14, 0.45, 0.93, 1.03, timber)
+            box(x, 0, 6.14, 0.45, 0.93, 1.03, concrete)
         box(0, 0, 6.64, 13.3, 1.62, 0.28, plaster)
         for x in np.arange(-6, 6.1, 0.43):
             box(x, 0, 6.79, 0.18, 2.88, 0.18, plaster)
@@ -302,9 +358,16 @@ def make_gate(arr, large, names):
     uv = np.zeros((len(vs), 2), "f4")
     for i, pair in mapped.items():
         uv[i] = pair
+    vertices, faces = np.float32(vs), np.int32(fs)
+    tri = vertices[faces]
+    normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    wrong = ((np.asarray(ms) == tile) & (normals[:, 2] < -0.0001)) | (
+        (np.asarray(ms) == letters) & (np.sum(normals[:, :2] * front, axis=1) < 0)
+    )
+    faces[wrong] = faces[wrong][:, ::-1]
     return (
-        np.float32(vs),
-        np.int32(fs),
+        vertices,
+        faces,
         uv,
         np.int16(ms),
     ), obstacles

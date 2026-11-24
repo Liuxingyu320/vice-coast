@@ -12,6 +12,12 @@ sys.path.insert(0, str(HERE))
 from tower import make_tower
 from foundations import foundation_mesh
 from gates import make_gate, PALETTE
+from materials import FACADE
+from surface_mesh import blocks_for_site
+from trees import prototype
+from main_hall import sanctuary
+from street_reference import add_street_reference
+from native_materials import detail_materials
 
 CACHE = Path(sys.argv[sys.argv.index("--") + 1])
 DEST = HERE.parents[1] / "assets"
@@ -19,11 +25,15 @@ scene = bpy.context.scene
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 blocks, names = pickle.load(open(CACHE / "meshes.pkl", "rb"))
-layout = json.loads((CACHE / "layout.json").read_text())
+layout = json.loads((DEST / "shiba-layout.json").read_text())
+blocks = [b for b in blocks if b[1] != "shiba-ground"]
+surface_roles = pickle.load(open(CACHE / "roof-flags.pkl", "rb"))
 bridges, backdrop = pickle.load(open(CACHE / "context.pkl", "rb"))
+bridges = pickle.load(open(CACHE / "viaducts.pkl", "rb"))
 blocks.extend(bridges)
 blocks.extend(backdrop)
 pages, facades, far_ground = pickle.load(open(CACHE / "context/detailed.pkl", "rb"))
+far_ground, horizon = pickle.load(open(CACHE / "horizon-grade.pkl", "rb"))
 sky_mat = len(names)
 names.append("Backdrop ortho")
 names.extend(f"Backdrop facade {k:02}" for k in range(pages))
@@ -48,131 +58,121 @@ gate_ids = {
     layout["verifiedBuildings"]["三解脱门"]: "sangedatsumon-gate",
     layout["verifiedBuildings"]["增上寺大门"]: "daimon-gate",
 }
-supports = {}
+supports, gate_bases, facade_styles = {}, {}, {}
+for key in [
+    *FACADE,
+    "Basalt shop base",
+    "Roof membrane",
+    "Bridge concrete",
+    "Bark",
+    "Leaf sprays",
+    "Kerb granite",
+    "Hall window",
+    "Hall gilt",
+    "Hall handrail",
+    "Stair nosing",
+    "Stair riser",
+    "Viaduct deck",
+]:
+    if key not in names:
+        names.append(key)
+city_materials = np.asarray([names.index(k) for k in FACADE])
+temple = layout["verifiedBuildings"]["增上寺大殿"]
+tower_id = "bldg_7aff4a51-be8b-405b-abe4-ac489697cbc8"
 for i, (group, fid, label, arr) in enumerate(list(blocks)):
+    v, f, uv, mi = arr
     if group == "Building" and fid in gate_ids:
         reconstructed, supports[fid] = make_gate(
             arr, gate_ids[fid] == "sangedatsumon-gate", names
         )
+        gate_bases[fid] = float(v[:, 2].min())
         blocks.append(("Reference", fid, label + " · PLATEAU LOD2", arr))
         blocks[i] = (group, fid, label + " · 建築復元", reconstructed)
+        continue
+    if group not in ("Building", "Backdrop", "Bridge") or fid == "skyline-ground":
+        continue
+    new = mi.copy()
+    if group == "Bridge":
+        new[mi == 1] = names.index("Bridge concrete")
+        new[mi == 0] = names.index("Viaduct deck")
+    else:
+        tri = v[f]
+        n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+        vertical = abs(n[:, 2]) < 0.64 * np.linalg.norm(n, axis=1)
+        blank = (mi == 1) | (mi == 3)
+        if group == "Backdrop":
+            style, (sv, sf) = horizon[0 if fid == "surveyed-skyline" else 1]
+            blocks.append(
+                (
+                    "Backdrop",
+                    fid + "-foundations",
+                    label + " · 基礎",
+                    (
+                        sv,
+                        sf,
+                        np.zeros((len(sv), 2), "f4"),
+                        np.full(len(sf), foundation_index, "i2"),
+                    ),
+                )
+            )
+        else:
+            h = np.ptp(v[:, 2])
+            style = 0 if h > 42 else 1 if h > 18 else 3 if v[:, 0].mean() > 430 else 2
+        face_style = np.broadcast_to(style, (len(f),))
+        style_per_vertex = np.zeros(len(v), "f4")
+        style_per_vertex[f] = face_style[:, None]
+        facade_styles[fid] = style_per_vertex
+        new = np.where(blank & vertical, city_materials[style], new)
+        new[(blank & ~vertical) | (mi == 2)] = names.index("Roof membrane")
+        worship = (
+            fid == temple or (fid in layout["templePrecinctIds"] and h < 24)
+            if group == "Building"
+            else False
+        )
+        if worship or fid == tower_id:
+            for m in np.unique(mi):
+                if not names[m].startswith("Facade "):
+                    continue
+                prefix = "Temple " if worship else "Tower "
+                key = prefix + names[m]
+                if key not in names:
+                    names.append(key)
+                new[mi == m] = names.index(key)
+            if worship:
+                new[blank & vertical] = names.index("Gate plaster")
+                new[(blank & ~vertical) | (mi == 2)] = names.index("Ibushi roof tiles")
+    updated = (v, f, uv, new.astype("i2"))
+    if fid == temple and group == "Building":
+        blocks.append(("Reference", fid, "大殿 · PLATEAU LOD2", arr))
+        updated, surface_roles[fid], stairs = sanctuary(
+            updated, surface_roles[fid], names, layout["height"]
+        )
+        (DEST / "shiba-hall-steps.json").write_text(
+            json.dumps(stairs, separators=(",", ":")) + "\n"
+        )
+        facade_styles[fid] = np.pad(facade_styles[fid], (0, len(updated[0]) - len(v)))
+    blocks[i] = (group, fid, label, updated)
 (DEST / "shiba-gate-supports.json").write_text(
     json.dumps(supports, separators=(",", ":"))
 )
-survey_ids = {b[1] for b in blocks if b[0] == "Building"} - gate_ids.keys()
-blocks.append(
-    (
-        "Terrain",
-        "building-foundations",
-        "建物 · 接地基礎",
-        foundation_mesh(CACHE, survey_ids, layout["height"], foundation_index),
+foundations, foundation_owners = foundation_mesh(
+    CACHE, layout, supports, gate_bases, foundation_index
+)
+blocks.append(("Terrain", "building-foundations", "建物 · 接地基礎", foundations))
+blocks.extend(
+    blocks_for_site(
+        DEST / "shiba-pavement.gz",
+        layout,
+        json.loads((CACHE / "aerial.json").read_text()),
+        names,
     )
 )
-
-
-def tube(a, b, r, top, sides):
-    a = np.float64(a)
-    b = np.float64(b)
-    d = b - a
-    d /= np.linalg.norm(d)
-    u = np.cross(d, [0, 0, 1] if abs(d[2]) < 0.9 else [0, 1, 0])
-    u /= np.linalg.norm(u)
-    v = np.cross(d, u)
-    pts = [
-        o
-        + rr * (u * math.cos(i * math.tau / sides) + v * math.sin(i * math.tau / sides))
-        for o, rr in [(a, r), (b, top)]
-        for i in range(sides)
-    ]
-    fs = []
-    for i in range(sides):
-        j = (i + 1) % sides
-        fs.extend([(i, j, i + sides), (j, j + sides, i + sides)])
-    return pts, fs
-
-
-if (CACHE / "canopy.npz").exists():
-    a = np.load(CACHE / "canopy.npz")
-    v = a["v"]
-    f = a["f"]
-    uv = a["uv"]
-    # Extend only exposed crown edges, retaining the measured surface on top.
-    edges = np.concatenate([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
-    _, idx, count = np.unique(
-        np.sort(edges, axis=1), axis=0, return_index=True, return_counts=True
-    )
-    rim = edges[idx[count == 1]]
-    ids, inverse = np.unique(rim, return_inverse=True)
-    lower = v[ids].copy()
-    lower[:, 2] -= 1.4 + 0.45 * np.sin(lower[:, 0] * 0.37 + lower[:, 1] * 0.16)
-    mapped = inverse.reshape(-1, 2) + len(v)
-    sides = np.vstack(
-        [
-            np.column_stack([rim[:, 1], rim[:, 0], mapped[:, 0]]),
-            np.column_stack([rim[:, 1], mapped[:, 0], mapped[:, 1]]),
-        ]
-    )
-    v = np.vstack([v, lower])
-    uv = np.vstack([uv, uv[ids]])
-    f = np.vstack([f, sides])
-    blocks.append(
-        (
-            "Landscape",
-            "laser-crowns",
-            "芝公園 · レーザー樹冠",
-            (v, f, uv, np.zeros(len(f), "i2")),
-        )
-    )
-    trunk = len(names)
-    names.append("Bark")
-    v = []
-    f = []
-    for k, (x, y, z, h, r, *_) in enumerate(
-        json.loads((CACHE / "trees.json").read_text())
-    ):
-        angle = k * 2.39996
-        stem = (x + 0.17 * math.sin(angle), y + 0.17 * math.cos(angle), z + h * 0.57)
-        for b, c, rs, re in [
-            ((x, y, z), stem, max(0.10, h * 0.016), max(0.09, h * 0.011)),
-            (
-                stem,
-                (
-                    x + math.sin(angle) * r * 0.57,
-                    y + math.cos(angle) * r * 0.57,
-                    z + h * 0.84,
-                ),
-                0.14,
-                0.07,
-            ),
-            (
-                stem,
-                (
-                    x - math.sin(angle) * r * 0.57,
-                    y - math.cos(angle) * r * 0.57,
-                    z + h * 0.8,
-                ),
-                0.14,
-                0.07,
-            ),
-        ]:
-            points, faces = tube(b, c, rs, re, 6)
-            f.extend(np.asarray(faces) + len(v))
-            v.extend(points)
-    blocks.append(
-        (
-            "Landscape",
-            "canopy-trunks",
-            "樹冠に基づく幹・枝",
-            (
-                np.float32(v),
-                np.int32(f),
-                np.zeros((len(v), 2), "f4"),
-                np.full(len(f), trunk, "i2"),
-            ),
-        )
-    )
-else:
-    raise RuntimeError("Missing measured canopy")
+tree_models = {}
+for kind in range(3):
+    fid = "tree-prototype-" + str(kind)
+    arr, normals = prototype(kind, names.index("Bark"), names.index("Leaf sprays"))
+    tree_models[fid] = normals
+    blocks.append(("Prototype", fid, fid, arr))
 mats = []
 
 
@@ -194,7 +194,12 @@ colors = {
     "Deck glazing": "314955",
     "Antenna steel": "a6a79f",
     "Warm windows": "c6a27a",
-    "Bark": "776c56",
+    "Bark": "645c4c",
+    "Bridge concrete": "89918e",
+    "White paint": "f2f3eb",
+    "Amber paint": "eab743",
+    "Asphalt section": "353c43",
+    "Leaf sprays": "ffffff",
 }
 for idx, name in enumerate(names):
     mat = bpy.data.materials.new(name)
@@ -202,7 +207,9 @@ for idx, name in enumerate(names):
     nt = mat.node_tree
     bs = nt.nodes.get("Principled BSDF")
     bs.inputs["Roughness"].default_value = 0.86
-    if name == "Photo" or name.startswith(("Facade ", "Backdrop ")):
+    if name == "Photo" or name.startswith(
+        ("Facade ", "Temple Facade", "Tower Facade", "Backdrop ")
+    ):
         path = (
             CACHE / "aerial.jpg"
             if name == "Photo"
@@ -220,9 +227,48 @@ for idx, name in enumerate(names):
         nt.links.new(tex.outputs["Color"], bs.inputs["Emission Color"])
         bs.inputs["Emission Strength"].default_value = 0.13
     else:
-        col = rgb(colors[name])
-        bs.inputs["Base Color"].default_value = col
-        mat.diffuse_color = col
+        filename = {
+            "Roof": "Roof membrane",
+            "Warm plaster": "Porcelain tile",
+            "Glass": "Curtain wall",
+            "Ibushi roof tiles": "Ibushi ceramic",
+        }.get(name, name)
+        path = (
+            HERE / "leaf-spray.png"
+            if name == "Leaf sprays"
+            else CACHE / "surface" / (filename + ".jpg")
+        )
+        if path.exists():
+            tex = nt.nodes.new("ShaderNodeTexImage")
+            tex.image = bpy.data.images.load(str(path), check_existing=True)
+            if name in ("Gate vermilion", "Gate plaster", "Gate timber"):
+                nt.links.new(tex.outputs["Color"], bs.inputs["Base Color"])
+                bump = nt.nodes.new("ShaderNodeBump")
+                bump.inputs["Strength"].default_value = 0.18
+                bump.inputs["Distance"].default_value = 0.012
+                nt.links.new(tex.outputs["Color"], bump.inputs["Height"])
+                nt.links.new(bump.outputs["Normal"], bs.inputs["Normal"])
+            else:
+                nt.links.new(tex.outputs["Color"], bs.inputs["Base Color"])
+            if name == "Leaf sprays":
+                nt.links.new(tex.outputs["Alpha"], bs.inputs["Alpha"])
+                mat.surface_render_method = "DITHERED"
+            if name in FACADE:
+                emission = nt.nodes.new("ShaderNodeTexImage")
+                emission.image = bpy.data.images.load(
+                    str(CACHE / "surface" / (name + " night.jpg")), check_existing=True
+                )
+                nt.links.new(emission.outputs["Color"], bs.inputs["Emission Color"])
+                bs.inputs["Emission Strength"].default_value = 0.16
+                bs.inputs["Roughness"].default_value = 0.54
+                bs.inputs["Metallic"].default_value = 0.12
+            if name == "Hall handrail":
+                bs.inputs["Roughness"].default_value = 0.37
+                bs.inputs["Metallic"].default_value = 0.74
+        else:
+            col = rgb(colors[name])
+            bs.inputs["Base Color"].default_value = col
+            mat.diffuse_color = col
         if name == "Deck glazing":
             bs.inputs["Roughness"].default_value = 0.35
             bs.inputs["Metallic"].default_value = 0.22
@@ -232,17 +278,6 @@ for idx, name in enumerate(names):
             str(CACHE / "gate-lettering.png"), check_existing=True
         )
         nt.links.new(tex.outputs["Color"], bs.inputs["Base Color"])
-    if name == "Warm plaster":
-        for filename, socket in [
-            ("office-albedo.png", "Base Color"),
-            ("office-emission.png", "Emission Color"),
-        ]:
-            tex = nt.nodes.new("ShaderNodeTexImage")
-            tex.image = bpy.data.images.load(str(CACHE / filename), check_existing=True)
-            nt.links.new(tex.outputs["Color"], bs.inputs[socket])
-        bs.inputs["Emission Strength"].default_value = 0.18
-        bs.inputs["Roughness"].default_value = 0.58
-        bs.inputs["Metallic"].default_value = 0.16
     mats.append(mat)
 
 collections = {}
@@ -255,15 +290,22 @@ def coll(key):
     return collections[key]
 
 
-def make(name, arr, collection, center=True):
+def make(name, arr, collection, center=True, attributes=None, radial=None, weld=False):
     v, f, uv, mi = arr
     me = bpy.data.meshes.new(name)
     offset = (v.min(0) + v.max(0)) * 0.5 if center else np.zeros(3, "f4")
     coords = np.ascontiguousarray(v - offset, dtype="f4")
+    loops = f
+    if weld:
+        # UVs remain per face corner. Share exactly coincident survey vertices in the editable shell.
+        coords, indices = np.unique(coords, axis=0, return_inverse=True)
+        loops = indices[f]
     me.vertices.add(len(coords))
     me.vertices.foreach_set("co", coords.ravel())
     me.loops.add(f.size)
-    me.loops.foreach_set("vertex_index", np.ascontiguousarray(f, dtype="i4").ravel())
+    me.loops.foreach_set(
+        "vertex_index", np.ascontiguousarray(loops, dtype="i4").ravel()
+    )
     me.polygons.add(len(f))
     me.polygons.foreach_set("loop_start", np.arange(0, f.size, 3, dtype="i4"))
     me.polygons.foreach_set("loop_total", np.full(len(f), 3, "i4"))
@@ -273,21 +315,56 @@ def make(name, arr, collection, center=True):
     me.polygons.foreach_set("material_index", local.astype("i4"))
     u = me.uv_layers.new(name="Survey UV")
     loop_uv = uv[f].copy()
-    blank = np.flatnonzero(mi == names.index("Warm plaster"))
-    if len(blank):
-        faces = v[f[blank]]
-        n = np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0])
-        tangent = np.column_stack([-n[:, 1], n[:, 0]])
-        tangent /= np.linalg.norm(tangent, axis=1).clip(1e-8)[:, None]
-        tangent[tangent[:, 0] < 0] *= -1
-        loop_uv[blank, :, 0] = (
-            np.sum(faces[:, :, :2] * tangent[:, None, :], axis=2) / 19.2
+    # Box projection uses local metres on the top, and a unit horizontal tangent on diagonal walls.
+    # Vertical façades retain exactly 3.3 m per storey regardless of heading or triangle aspect.
+    for mat_id in used:
+        mat_name = names[mat_id]
+        if mat_name not in (
+            *FACADE,
+            "Foundation concrete",
+            "Roof membrane",
+            "Ibushi roof tiles",
+            "Gate timber",
+            "Gate vermilion",
+            "Gate plaster",
+            "Gate painted concrete",
+            "Bridge concrete",
+        ):
+            continue
+        subset = np.flatnonzero(mi == mat_id)
+        face = v[f[subset]]
+        n = np.cross(face[:, 1] - face[:, 0], face[:, 2] - face[:, 0])
+        n /= np.linalg.norm(n, axis=1).clip(1e-9)[:, None]
+        along = np.column_stack([-n[:, 1], n[:, 0]])
+        along /= np.linalg.norm(along, axis=1).clip(1e-8)[:, None]
+        along[
+            (along[:, 0] < -0.0001) | ((abs(along[:, 0]) <= 0.0001) & (along[:, 1] < 0))
+        ] *= -1
+        scale = (
+            (19.2, 26.4)
+            if mat_name in FACADE
+            else (2.4, 2.4)
+            if mat_name != "Ibushi roof tiles"
+            else (1.6, 1.12)
         )
-        loop_uv[blank, :, 1] = faces[:, :, 2] / 26.4
+        loop_uv[subset, :, 0] = (
+            np.sum(face[:, :, :2] * along[:, None, :], axis=2) / scale[0]
+        )
+        loop_uv[subset, :, 1] = face[:, :, 2] / scale[1]
+        top = abs(n[:, 2]) > 0.68
+        loop_uv[subset[top]] = face[top, :, :2] / scale
     u.data.foreach_set(
         "uv", np.ascontiguousarray(loop_uv.reshape(-1, 2), dtype="f4").ravel()
     )
+    if attributes:
+        for key, values in attributes.items():
+            attribute = me.attributes.new(key, "FLOAT", "POINT")
+            attribute.data.foreach_set("value", np.ascontiguousarray(values, "f4"))
+    if name.startswith("paving-") or name == "shiba-ground" or radial is not None:
+        me.polygons.foreach_set("use_smooth", np.ones(len(f), bool))
     me.update(calc_edges=True)
+    if radial is not None:
+        me.normals_split_custom_set_from_vertices(radial.tolist())
     ob = bpy.data.objects.new(name, me)
     collection.objects.link(ob)
     ob.location = offset
@@ -302,9 +379,22 @@ groups = {
     "Landscape": "植生｜航空レーザー",
     "Bridge": "橋梁｜PLATEAU",
     "Backdrop": "遠景｜周辺の街並み",
+    "Prototype": "植生｜樹形原型",
 }
+native_finishes = {}
 for group, fid, label, arr in blocks:
-    ob = make(label or fid, arr, coll(groups[group]))
+    ob = make(
+        ("原型 · " if group == "Prototype" else "地物 · " if group == "Terrain" else "")
+        + (label or fid),
+        arr,
+        coll(groups["Backdrop"] if fid == "skyline-viaduct" else groups[group]),
+        center=group != "Prototype",
+        weld=group
+        in ("Building", "Bridge", "Backdrop", "Reference", "Tower", "Terrain"),
+        radial=tree_models.get(fid),
+    )
+    if group in ("Terrain", "Building", "Backdrop"):
+        detail_materials(ob, fid, DEST, native_finishes)
     ob["feature_id"] = fid
     if group == "Building":
         ob["survey_lod"] = 2
@@ -312,6 +402,17 @@ for group, fid, label, arr in blocks:
             ob["reconstruction"] = gate_ids[fid]
 coll(groups["Reference"]).hide_render = True
 coll(groups["Reference"]).hide_viewport = True
+proto_collection = coll(groups["Prototype"])
+for k, (x, y, z, h, r) in enumerate(layout["trees"]):
+    kind = 0 if k % 11 < 6 else 1 if k % 11 < 9 else 2
+    prototype_ob = proto_collection.objects["原型 · tree-prototype-" + str(kind)]
+    tree = bpy.data.objects.new("樹木 %03d" % k, prototype_ob.data)
+    coll(groups["Landscape"]).objects.link(tree)
+    tree.location = (x, y, z)
+    tree.scale = (r, r, h)
+    tree.rotation_euler.z = k * 2.399963
+proto_collection.hide_render = True
+proto_collection.hide_viewport = True
 laser = np.load(CACHE / "tower-laser.npy")
 me = bpy.data.meshes.new("東京タワー • scan returns")
 me.vertices.add(len(laser))
@@ -400,6 +501,8 @@ for scr in bpy.data.screens:
             s.shading.use_scene_world = True
             s.shading.use_scene_lights = True
             s.overlay.show_overlays = False
+if "--runtime-only" not in sys.argv:
+    add_street_reference(CACHE, make, coll, names, mats)
 bpy.ops.file.pack_all()
 for i in bpy.data.images:
     if i.packed_files:
@@ -411,11 +514,8 @@ if "--runtime-only" not in sys.argv:
     bpy.ops.wm.save_as_mainfile(
         filepath=str(DEST / "芝公园与东京塔.blend"), compress=True, relative_remap=False
     )
-# WebGL builds the same chart in Canvas, shared by all buildings. Keep it packed only in the authoring file.
-author_wall = mats[names.index("Warm plaster")]
-for node in list(author_wall.node_tree.nodes):
-    if node.type == "TEX_IMAGE":
-        author_wall.node_tree.nodes.remove(node)
+if "--authoring-only" in sys.argv:
+    sys.exit(0)
 # The distant skyline is viewed across hundreds of metres. Keep the full atlas
 # inside Blender and use a smaller baked copy in the interactive renderer.
 for material in mats:
@@ -427,6 +527,7 @@ for material in mats:
         if node.type == "TEX_IMAGE":
             node.image = small
 # Batch only the runtime copy; the production file above retains individual editable buildings.
+owners = {f["id"]: i for i, f in enumerate(layout["footprints"])}
 batches = defaultdict(list)
 for group, fid, label, arr in blocks:
     if group in ("Reference", "Landscape"):
@@ -436,7 +537,7 @@ for group, fid, label, arr in blocks:
         key = gate_ids.get(fid, "Survey buildings")
     else:
         key = fid
-    batches[key].append(arr)
+    batches[key].append((fid, arr))
 objs = []
 for k, parts in batches.items():
     vv = []
@@ -444,7 +545,15 @@ for k, parts in batches.items():
     uu = []
     ii = []
     off = 0
-    for v, f, uv, mi in parts:
+    id_arrays, roof_arrays, style_arrays = [], [], []
+    for fid, (v, f, uv, mi) in parts:
+        if fid in facade_styles:
+            style_arrays.append(facade_styles[fid])
+        if fid in owners:
+            id_arrays.append(np.full(len(v), owners[fid], "f4"))
+            roof_arrays.append(
+                surface_roles[fid] if fid not in gate_ids else np.zeros(len(v), "f4")
+            )
         vv.append(v)
         ff.append(f + off)
         uu.append(uv)
@@ -452,23 +561,60 @@ for k, parts in batches.items():
         off += len(v)
     objs.append(
         make(
-            k, tuple(map(np.concatenate, (vv, ff, uu, ii))), coll("Runtime only"), False
+            k,
+            tuple(map(np.concatenate, (vv, ff, uu, ii))),
+            coll("Runtime only"),
+            False,
+            {
+                **(
+                    {
+                        "_FEATURE_ID": np.concatenate(id_arrays),
+                        "_SURVEY_ROLE": np.concatenate(roof_arrays),
+                    }
+                    if id_arrays
+                    else {}
+                ),
+                **(
+                    {"_FEATURE_ID": foundation_owners}
+                    if k == "building-foundations"
+                    else {}
+                ),
+                **(
+                    {"_FACADE_STYLE": np.concatenate(style_arrays)}
+                    if style_arrays
+                    else {}
+                ),
+            },
+            tree_models.get(k),
         )
     )
 objs[0]["attribution"] = scene["attribution"]
-bpy.ops.object.select_all(action="DESELECT")
-for ob in objs:
-    ob.select_set(True)
-bpy.ops.export_scene.gltf(
-    filepath=str(DEST / "shiba-park.glb"),
-    export_format="GLB",
-    use_selection=True,
-    export_extras=True,
-    export_normals=True,
-    export_animations=False,
-    export_cameras=False,
-    export_lights=False,
-)
+
+
+def asset_group(name):
+    if name.startswith("paving-"):
+        return "pavement"
+    if "skyline" in name:
+        return "horizon"
+    return "park"
+
+
+for group in ("park", "pavement", "horizon"):
+    bpy.ops.object.select_all(action="DESELECT")
+    for ob in objs:
+        if asset_group(ob.name) == group:
+            ob.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=str(DEST / f"shiba-{group}.glb"),
+        export_format="GLB",
+        use_selection=True,
+        export_attributes=True,
+        export_extras=True,
+        export_normals=True,
+        export_animations=False,
+        export_cameras=False,
+        export_lights=False,
+    )
 print(
     "SHIBA EXPORTED",
     len(blocks),

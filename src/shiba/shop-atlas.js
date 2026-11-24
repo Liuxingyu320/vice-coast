@@ -1,4 +1,5 @@
-import { canvasMap, random } from './primitives.js';
+import interiorsURL from '../../assets/shiba-shop-interiors.jpg';
+import { canvasMap } from './primitives.js';
 
 // Each cell has its own bleed margin. Text is painted at the original chart resolution.
 export const brands = [
@@ -10,15 +11,17 @@ export const brands = [
   ['自家焙煎 珈琲', 'COFFEE ROASTERS', '#413b34', '#e5cfaa'],
   ['そば処 江戸路', 'EDOJI  /  SOBA', '#283c45', '#f4e7c8'],
 ];
-const size = 384,
+const size = 512,
   cols = 4,
   rows = 6;
 export const atlasGrid = [cols, rows];
 export const cells = { glass: 0, sign: 7, blade: 14, closed: 21, ac: 22, guide: 23 };
 // Road signs, shelters and fixtures use a second strip below the shop charts.
-export function makeShopAtlas() {
+export async function makeShopAtlas() {
+  const interiors = new Image();
+  interiors.src = interiorsURL;
+  await interiors.decode();
   return canvasMap(cols * size, (rows + 1) * size, (ctx) => {
-    const rng = random(72904);
     function cell(i, paint) {
       ctx.save();
       ctx.translate((i % cols) * size, Math.floor(i / cols) * size);
@@ -41,88 +44,15 @@ export function makeShopAtlas() {
     }
     brands.forEach(([name, en, ink, cream], i) => {
       cell(i, (g) => {
-        rect(g, 0, 0, 512, 512, '#343e3e');
-        const interior = g.createLinearGradient(0, 25, 0, 496);
-        interior.addColorStop(0, '#374342');
-        interior.addColorStop(0.25, i % 2 ? '#bea37b' : '#b3b4a4');
-        interior.addColorStop(0.8, '#81765f');
-        interior.addColorStop(1, '#464944');
-        g.fillStyle = interior;
-        g.fillRect(8, 9, 496, 492);
-        // Receding ceiling, rear shelving and pendant lights behind the street glazing.
-        g.fillStyle = '#b7ab90';
-        g.beginPath();
-        g.moveTo(0, 0);
-        g.lineTo(512, 0);
-        g.lineTo(418, 111);
-        g.lineTo(92, 111);
-        g.closePath();
-        g.fill();
-        for (let k = 0; k < 5; k++) {
-          let x = 44 + k * 104;
-          g.strokeStyle = '#77786d';
-          g.lineWidth = 2;
-          g.beginPath();
-          g.moveTo(x, 0);
-          g.lineTo(100 + x * 0.61, 111);
-          g.stroke();
-        }
-        if (i === 0 || i === 3 || i === 4) {
-          for (let shelf = 0; shelf < 4; shelf++)
-            for (let c = 0; c < 25; c++) {
-              let x = 12 + c * 20 + (shelf % 2) * 2,
-                y = 160 + shelf * 57,
-                hh = 16 + rng() * 22;
-              const pkg = ['#a64d36', '#e3be77', '#6b8e79', '#b7b4a1', '#c4d2ca', '#586e77', '#d29e62'][
-                Math.floor(rng() * 7)
-              ];
-              rect(g, x, y - hh, 9 + rng() * 8, hh, pkg);
-              rect(g, x, y - hh * 0.6, 10, 4, '#e6d5ae');
-              rect(g, 9, y + 1, 493, 6, '#514e43');
-              rect(g, 9, y + 7, 493, 3, '#c7b89e');
-            }
-        } else {
-          for (let k = 0; k < 4; k++) {
-            const x = 42 + 122 * k;
-            rect(g, x, 83, 3, 44, '#4a453b');
-            g.fillStyle = '#dcc29a';
-            g.beginPath();
-            g.moveTo(x - 16, 142);
-            g.lineTo(x - 7, 128);
-            g.lineTo(x + 8, 128);
-            g.lineTo(x + 18, 142);
-            g.fill();
-            rect(g, x - 14, 142, 28, 4, '#fff0c4');
-            rect(g, x - 45, 309, 98, 8, '#665343');
-            rect(g, x + 1, 317, 5, 78, '#595145');
-            for (let j of [-23, 24]) {
-              rect(g, x + j - 10, 330, 26, 7, '#8f735a');
-              rect(g, x + j, 337, 4, 55, '#53463c');
-              rect(g, x + j + 9, 303, 4, 30, '#5b4e42');
-            }
-          }
-          for (let k = 0; k < 3; k++) {
-            rect(g, 43 + k * 145, 173, 81, 81, '#675a49');
-            rect(g, 47 + k * 145, 177, 73, 73, k % 2 ? '#bbae8e' : '#c6b192');
-            text(g, ['本日', '手仕事', '芝'][k], 84 + k * 145, 222, '24px serif', '#665441');
-          }
-        }
-        const reflection = g.createLinearGradient(0, 0, 512, 148);
-        reflection.addColorStop(0, '#bdd6df44');
-        reflection.addColorStop(0.48, '#accbce12');
-        reflection.addColorStop(0.54, '#d2e5e435');
-        reflection.addColorStop(1, '#6e858629');
-        g.fillStyle = reflection;
-        g.fillRect(9, 9, 494, 487);
-        for (const x of [7, 174, 340, 500]) {
-          rect(g, x, 0, 7, 512, '#3a4444');
-          rect(g, x + 5, 0, 2, 512, '#adb0a5');
-        }
-        rect(g, 0, 89, 512, 6, '#56605d');
-        rect(g, 0, 457, 512, 6, '#455050');
-        rect(g, 316, 257, 5, 56, '#d3d0bb');
-        rect(g, 198, 179, 66, 82, '#e4d5af');
-        text(g, i % 2 ? '営業中' : '入口', 231, 229, 'bold 18px sans-serif', ink);
+        const w = interiors.width / 2,
+          h = interiors.height / 4;
+        g.drawImage(interiors, (i % 2) * w + 2, Math.floor(i / 2) * h + 2, w - 4, h - 4, 0, 0, 512, 512);
+        const glass = g.createLinearGradient(0, 0, 160, 512);
+        glass.addColorStop(0, 'rgba(142,173,179,.14)');
+        glass.addColorStop(0.67, 'rgba(121,150,162,.035)');
+        glass.addColorStop(1, 'rgba(26,37,41,.13)');
+        g.fillStyle = glass;
+        g.fillRect(0, 0, 512, 512);
       });
       cell(7 + i, (g) => {
         rect(g, 0, 0, 512, 512, cream);
@@ -197,20 +127,6 @@ export function makeShopAtlas() {
       }
       text(g, '● 現在地', 320, 306, 'bold 22px sans-serif', '#a44537');
       text(g, 'TOKYO METROPOLITAN PARK', 256, 462, '20px sans-serif', '#35574a');
-    });
-    cell(24, (g) => {
-      rect(g, 0, 0, 512, 512, '#245d94');
-      g.strokeStyle = '#e0e8db';
-      g.lineWidth = 6;
-      g.strokeRect(8, 12, 496, 488);
-      [
-        ['↑  東京タワー', 'Tokyo Tower'],
-        ['←  芝公園', 'Shiba Park'],
-        ['→  大門', 'Daimon'],
-      ].forEach(([jp, en], i) => {
-        text(g, jp, 31, 100 + i * 151, 'bold 61px sans-serif', '#f1f4e9', 'left');
-        text(g, en, 112, 145 + i * 151, '29px sans-serif', '#e1e8e4', 'left');
-      });
     });
     cell(25, (g) => {
       const a = g.createLinearGradient(0, 0, 512, 512);

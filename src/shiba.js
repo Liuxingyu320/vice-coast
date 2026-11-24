@@ -1,6 +1,9 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import compressedDistrict from '../assets/shiba-park.glb';
+import steps from '../assets/shiba-hall-steps.json';
+import compressedHorizon from '../assets/shiba-horizon.glb';
+import compressedPavement from '../assets/shiba-pavement.glb';
 import { gunzipSync } from 'three/addons/libs/fflate.module.js';
 import vehicleBytes from '../assets/solano-gt.glb';
 import data from '../assets/shiba-layout.json';
@@ -8,9 +11,10 @@ import gateSupports from '../assets/shiba-gate-supports.json';
 import { furnishAvenue } from './shiba/avenue.js';
 import { createLighting } from './shiba/lighting.js';
 import { createTrees, makeStreets } from './shiba/street.js';
+import { finishPavement } from './shiba/pavement.js';
+import { surveyHeight } from './shiba/terrain.js';
 import { createHud } from './shiba/hud.js';
 import { buildFurniture } from './shiba/furniture.js';
-import { traffic } from './shiba/traffic.js';
 import { createDriving, batchCar } from './shiba/driving.js';
 
 const byId = (id) => document.getElementById(id);
@@ -31,20 +35,7 @@ function inside(x, y, ring) {
   }
   return hit;
 }
-function terrain(x, y) {
-  const { height: g } = data;
-  const fx = clamp((x - g.x) / g.step, 0, g.w - 1.001),
-    fy = clamp((y - g.y) / g.step, 0, g.h - 1.001);
-  const i = Math.floor(fx),
-    j = Math.floor(fy),
-    a = fx - i,
-    b = fy - j,
-    n = j * g.w + i;
-  return (
-    ((g.cm[n] * (1 - a) + g.cm[n + 1] * a) * (1 - b) + (g.cm[n + g.w] * (1 - a) + g.cm[n + g.w + 1] * a) * b) /
-    100
-  );
-}
+const terrain = (x, y) => surveyHeight(data.height, x, y);
 const footprints = data.footprints.flatMap((f) =>
   (gateSupports[f.id] || [null]).map((support) => {
     const rings = support ? [support] : f.rings;
@@ -72,10 +63,15 @@ async function create() {
   const scene = new T.Scene(),
     camera = new T.PerspectiveCamera(55, 1, 0.21, 4400);
   const loader = new GLTFLoader();
-  let district, car;
+  let district, pavement, horizon, car;
   try {
-    [district, car] = await Promise.all(
-      [gunzipSync(compressedDistrict), vehicleBytes].map(async (bytes) => {
+    [district, pavement, horizon, car] = await Promise.all(
+      [
+        gunzipSync(compressedDistrict),
+        gunzipSync(compressedPavement),
+        gunzipSync(compressedHorizon),
+        vehicleBytes,
+      ].map(async (bytes) => {
         const buffer =
           bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
             ? bytes.buffer
@@ -88,19 +84,27 @@ async function create() {
     throw e;
   }
   batchCar(car);
+  district.add(pavement, horizon);
   scene.add(district, car);
   car.visible = false;
   const lighting = createLighting(renderer, scene, district, car, data.height);
-  const streets = makeStreets(scene, data, terrain, district);
-  createTrees(scene, data.trees);
+  const streets = makeStreets(data);
+  finishPavement(district, data, lighting.evening);
+  createTrees(scene, district, data.trees);
   const furniture = buildFurniture(scene, streets, terrain, data, lighting.texture, passable);
-  const avenue = furnishAvenue(scene, streets, terrain, passable);
+  const avenue = await furnishAvenue(scene, streets, terrain, passable, data.fixtures);
   canvas.dataset.avenue = JSON.stringify(avenue.inventory);
-  const actors = traffic(scene, streets, terrain, data.startWalk);
   const driving = createDriving(car, terrain, passable, footprints, data.boundary, streets);
   const hud = createHud(data);
   let dark = 0.7;
-  const skyline = ['surveyed-skyline', 'skyline-photofacades', 'skyline-ground']
+  const skyline = [
+    'surveyed-skyline',
+    'skyline-photofacades',
+    'skyline-ground',
+    'skyline-viaduct',
+    'surveyed-skyline-foundations',
+    'skyline-photofacades-foundations',
+  ]
     .map((name) => district.getObjectByName(name))
     .filter(Boolean);
   function showSkyline(visible) {
@@ -150,6 +154,16 @@ async function create() {
     hud.full(state);
     if (state.mode !== 'overview') hud.place(locationLabel()[0]);
   }
+  function walkHeight(x, y, ground) {
+    const dx = x - steps.center[0],
+      dy = y - steps.center[1];
+    const cross = dx * steps.along[0] + dy * steps.along[1],
+      depth = steps.outer - dx * steps.front[0] - dy * steps.front[1];
+    if (depth < 0 || depth > steps.count * steps.tread + 2.2 || Math.abs(cross) > steps.halfWidth)
+      return ground;
+    const tread = Math.min(steps.count, Math.floor(depth / steps.tread) + 1);
+    return Math.max(ground, steps.bottom + ((steps.landing - steps.bottom) * tread) / steps.count);
+  }
   function turnToTower() {
     state.heading = Math.atan2(-state.x, -state.y);
     state.pitch = Math.max(
@@ -177,12 +191,15 @@ async function create() {
     const up = new T.Vector3(-sin * rise, run, -cos * rise);
     const back = new T.Vector3(sin * run, rise, cos * run);
     const tangent = Math.tan(T.MathUtils.degToRad(camera.fov / 2));
+    overviewTarget.set(250, 45, 245);
+    const horizontal = overviewPoints.map((p) => p.clone().sub(overviewTarget).dot(right));
+    overviewTarget.addScaledVector(right, (Math.min(...horizontal) + Math.max(...horizontal)) * 0.5);
     state.range = Math.max(
       ...overviewPoints.map((point) => {
         const vector = point.clone().sub(overviewTarget);
         const horizontal = Math.abs(vector.dot(right)) / (tangent * camera.aspect);
         const vertical = Math.abs(vector.dot(up)) / tangent;
-        return vector.dot(back) + 1.18 * Math.max(horizontal, vertical);
+        return vector.dot(back) + 1.26 * Math.max(horizontal, vertical);
       }),
     );
   }
@@ -193,9 +210,9 @@ async function create() {
     car.visible = false;
     state.tilt = 0.71;
     state.angle = 0.62;
+    frameDistrict();
     state.focusX = overviewTarget.x;
     state.focusY = -overviewTarget.z;
-    frameDistrict();
     info();
   }
   function setMap(show) {
@@ -293,10 +310,11 @@ async function create() {
       );
       camera.lookAt(overviewTarget);
     } else if (state.mode === 'walk') {
-      camera.position.set(state.x, ground + 1.69, -state.y);
+      const walkZ = walkHeight(state.x, state.y, ground) + 1.69;
+      camera.position.set(state.x, walkZ, -state.y);
       camera.lookAt(
         state.x + Math.sin(state.heading) * Math.cos(state.pitch),
-        ground + 1.69 + Math.sin(state.pitch),
+        walkZ + Math.sin(state.pitch),
         -state.y - Math.cos(state.heading) * Math.cos(state.pitch),
       );
     } else {
@@ -305,7 +323,6 @@ async function create() {
     dark = lighting.update(dt, now / 1000, camera, state, ground);
     furniture(now / 1000, dark);
     avenue.update(dark);
-    actors.update(dt, now / 1000, dark, state);
     hud.draw(state, now);
     renderer.render(scene, camera);
     canvas.dataset.drawCalls = renderer.info.render.calls;
@@ -313,7 +330,7 @@ async function create() {
       Number(canvas.dataset.peakDrawCalls) || 0,
       renderer.info.render.calls,
     );
-    canvas.dataset.actors = actors.cars.length + ',' + actors.walkers.length;
+    canvas.dataset.actors = '0,0';
     canvas.dataset.fov = camera.fov.toFixed(2);
     canvas.dataset.orbit = driving.orbitAngle.toFixed(3);
     canvas.dataset.mode = state.mode;

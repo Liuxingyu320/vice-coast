@@ -3,7 +3,6 @@
 import json, pickle, sys, math
 from pathlib import Path
 from shapely import Polygon, LineString, Point, union_all, STRtree
-import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 AXIS = LineString(
@@ -32,6 +31,13 @@ def main(cache):
         for (k, p), i in zip(d["roads"], d["roadInfo"])
         if k == "road" and i[0] >= 5.5
     ]
+    carriageways = union_all(
+        [
+            LineString(p).buffer(i[0] / 2, quad_segs=12)
+            for (k, p), i in zip(d["roads"], d["roadInfo"])
+            if k == "road"
+        ]
+    )
     surfaces, _, _ = pickle.load(open(cache / "surfaces.pkl", "rb"))
     ids = {f["id"] for f in d["footprints"]} - set(d["verifiedBuildings"].values())
     polygons = {}
@@ -91,13 +97,38 @@ def main(cache):
                     y = a[1] + dy * t
                     if AXIS.distance(Point(x, y)) > 54:
                         continue
+                    # The largest awning, projecting sign and shop jamb must fit the actual bay and clear its neighbours.
+                    width = length / count - 0.18
+
+                    def envelope(w):
+                        return Polygon(
+                            [
+                                (x + tx * u + nx * v, y + ty * u + ny * v)
+                                for u, v in [
+                                    (-w / 2, 0.08),
+                                    (w / 2, 0.08),
+                                    (w / 2, 1.35),
+                                    (-w / 2, 1.35),
+                                ]
+                            ]
+                        )
+
+                    while width > 2.30:
+                        panel = envelope(width)
+                        if not carriageways.intersects(panel) and not any(
+                            k != idx for k in index.query(panel, predicate="intersects")
+                        ):
+                            break
+                        width -= 0.32
+                    if width <= 2.30:
+                        continue
                     out.append(
                         [
                             round(x, 3),
                             round(y, 3),
                             round(nx, 5),
                             round(ny, 5),
-                            round(length / count - 0.18, 2),
+                            round(width, 2),
                             idx % 7,
                         ]
                     )

@@ -2,87 +2,85 @@ import * as T from 'three';
 import { instances, canvasMap } from './primitives.js';
 export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   const steel = [],
+    poles = [],
+    shoes = [],
     rail = [],
     white = [],
     green = [],
     dark = [],
+    heads = [],
     lamp = [],
-    beads = [[], [], []],
-    signs = [],
+    beads = Array.from({ length: 6 }, () => []),
+    hoods = [],
+    signs = new Map(),
     boxes = [],
     faces = [],
-    pools = [],
     cones = [],
     glowPositions = [];
-  const pole = (rows, x, y, h, w, base = 0, col) =>
-    rows.push([x, terrain(x, y) + base + h / 2, -y, w, h, w, 0, col]);
   const put = (rows, x, y, z, w, h, d, ang = 0, col) => rows.push([x, z, -y, w, h, d, ang, col]);
-  const signals = streets.sites.filter((s) => s.kind === 'traffic_signals');
-  for (const s of signals) {
-    const dx = Math.sin(s.heading),
-      dy = Math.cos(s.heading),
-      side = s.width * 0.5 + 0.38;
-    const x = s.x + dy * side,
-      y = s.y - dx * side,
-      g = terrain(x, y);
-    pole(steel, x, y, 5.15, 0.145);
-    put(steel, x - dy * 1.65, y + dx * 1.65, g + 4.99, 3.6, 0.11, 0.12, -s.heading);
-    const bx = x - dy * 3.1,
-      by = y + dx * 3.1;
-    put(dark, bx, by, g + 4.85, 1.48, 0.45, 0.27, -s.heading);
-    for (let k = 0; k < 3; k++)
-      put(
-        beads[k],
-        bx + dy * (k - 1) * 0.45 - dx * 0.16,
-        by - dx * (k - 1) * 0.45 - dy * 0.16,
-        g + 4.85,
-        0.29,
-        0.29,
-        0.095,
-        -s.heading,
-      );
-    put(signs, x - dy * 0.94, y + dx * 0.94, g + 4.52, 1.22, 0.38, 0.09, -s.heading);
+  const pole = (rows, x, y, z, h, w, base = 0) => put(rows, x, y, z + base + h / 2, w, h, w);
+  for (const [index, [x, y, g, dx, dy]] of data.fixtures.signals.entries()) {
+    const yaw = -Math.atan2(dx, dy),
+      reach = 4.55;
+    pole(shoes, x, y, g, 0.055, 0.26);
+    pole(poles, x, y, g, 5.3, 0.145);
+    put(steel, x - (dy * reach) / 2, y + (dx * reach) / 2, g + 5.2, reach + 0.26, 0.13, 0.13, yaw);
+    const bx = x - dy * reach,
+      by = y + dx * reach;
+    put(heads, bx, by, g + 4.99, 1.5, 0.46, 0.31, yaw);
+    const phaseGroup = Math.abs(dx) > Math.abs(dy) ? 0 : 3;
+    for (let k = 0; k < 3; k++) {
+      const px = bx + dy * (k - 1) * 0.45,
+        py = by - dx * (k - 1) * 0.45;
+      put(beads[k + phaseGroup], px - dx * 0.183, py - dy * 0.183, g + 4.99, 0.286, 0.286, 0.07, yaw);
+      put(hoods, px - dx * 0.25, py - dy * 0.25, g + 5.005, 0.346, 0.346, 0.24, yaw);
+    }
+    const title = data.fixtures.junctionNames[index];
+    if (title) {
+      if (!signs.has(title)) signs.set(title, []);
+      put(signs.get(title), x - dy * 1.65, y + dx * 1.65, g + 4.91, 1.44, 0.42, 0.08, yaw);
+    }
   }
-  for (const r of streets.roads) {
-    if (r.width < 5 || r.length < 20) continue;
-    for (let t = 15; t < r.length; t += Math.max(25, r.width * 2.8)) {
-      const s = r.segments.find((q) => q.start + q.len >= t);
-      if (!s) continue;
-      const a = Math.atan2(s.dx, s.dy),
-        side = r.width / 2 + 0.46,
-        x = s.x + s.dx * (t - s.start) + s.dy * side,
-        y = s.y + s.dy * (t - s.start) - s.dx * side,
-        g = terrain(x, y);
-      if (streets.onRoad(x, y, 0.08)) continue;
-      pole(steel, x, y, 6.25, 0.105);
-      put(steel, x - s.dy * 0.68, y + s.dx * 0.68, g + 6.16, 1.48, 0.075, 0.07, -a);
-      put(dark, x - s.dy * 1.38, y + s.dx * 1.38, g + 6.12, 0.55, 0.1, 0.31, -a);
-      put(lamp, x - s.dy * 1.38, y + s.dx * 1.38, g + 6.04, 0.48, 0.065, 0.25, -a);
-      glowPositions.push(x - s.dy * 1.38, g + 5.98, -y - s.dx * 1.38);
-      const hx = x - s.dy * 1.38,
-        hy = y + s.dx * 1.38;
-      cones.push([hx, g + 3.09, -hy, 4.7, 5.85, 4.7]);
-      pools.push([hx, terrain(hx, hy) + 0.154, -hy, 6.9, 1, 8.8, -a]);
-      const crossingClear = !streets.sites.some((q) => {
-        const vx = q.x - x - 1.8 * s.dx,
-          vy = q.y - y - 1.8 * s.dy;
-        return Math.abs(vx * s.dx + vy * s.dy) < 4.6 && Math.abs(vx * s.dy - vy * s.dx) < q.width / 2 + 1.9;
-      });
-      if (
-        r.width >= 7 &&
-        crossingClear &&
-        [0, 0.6, 1.2, 1.8, 2.4, 3, 3.6].every((t) => !streets.onRoad(x + s.dx * t, y + s.dy * t, 0.12))
-      ) {
-        for (let j = 0; j < 3; j++) {
-          const xx = x + s.dx * (j * 1.8),
-            yy = y + s.dy * (j * 1.8);
-          pole(white, xx, yy, 0.78, 0.08);
-          pole(green, xx, yy, 0.25, 0.087, 0.43);
-        }
-        for (const h of [0.43, 0.7]) put(rail, x + s.dx * 1.8, y + s.dy * 1.8, g + h, 0.06, 0.07, 3.55, -a);
-        pole(white, x - s.dy * (r.width + 0.8), y + s.dx * (r.width + 0.8), 0.8, 0.11);
-        pole(lamp, x - s.dy * (r.width + 0.8), y + s.dx * (r.width + 0.8), 0.12, 0.118, 0.57);
-      }
+  for (const [x, y, g, dx, dy] of data.fixtures.lamps) {
+    const a = Math.atan2(dx, dy),
+      reach = 2.85;
+    pole(shoes, x, y, g, 0.045, 0.2);
+    pole(poles, x, y, g, 6.25, 0.11);
+    put(steel, x - (dy * reach) / 2, y + (dx * reach) / 2, g + 6.16, reach + 0.1, 0.085, 0.09, -a);
+    const hx = x - dy * reach,
+      hy = y + dx * reach;
+    put(dark, hx, hy, g + 6.12, 0.61, 0.1, 0.31, -a);
+    put(lamp, hx, hy, g + 6.055, 0.51, 0.035, 0.25, -a);
+    glowPositions.push(hx, g + 6.02, -hy);
+    cones.push([hx, g + 3.09, -hy, 4.7, 5.85, 4.7]);
+  }
+  for (const anchors of data.fixtures.rails) {
+    for (const [x, y, g] of anchors) {
+      pole(white, x, y, g, 0.79, 0.081);
+      pole(green, x, y, g, 0.25, 0.087, 0.43);
+    }
+    for (let j = 1; j < anchors.length; j++) {
+      const [x, y, g] = anchors[j - 1],
+        [X, Y, G] = anchors[j];
+      const delta = new T.Vector3(X - x, G - g, y - Y),
+        length = delta.length();
+      const rotation = new T.Euler().setFromQuaternion(
+        new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), delta.normalize()),
+        'YXZ',
+      );
+      for (const h of [0.44, 0.71])
+        rail.push([
+          (x + X) / 2,
+          (g + G) / 2 + h,
+          -(y + Y) / 2,
+          0.058,
+          0.062,
+          length,
+          rotation.y,
+          undefined,
+          rotation.x,
+          rotation.z,
+        ]);
     }
   }
   const machineMap = canvasMap(256, 384, (g) => {
@@ -110,62 +108,77 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
     g.fillRect(68, 331, 119, 28);
     g.fillRect(207, 275, 27, 46);
   });
-  const roadSignMap = canvasMap(160, 48, (g) => {
-    g.fillStyle = '#e7eae6';
-    g.fillRect(0, 0, 160, 48);
-    g.fillStyle = '#365565';
-    g.textAlign = 'center';
-    g.font = 'bold 20px sans-serif';
-    g.fillText('芝公園・大門', 80, 31);
-  });
+  const roadSignMap = (title) =>
+    canvasMap(384, 96, (g) => {
+      g.fillStyle = '#e7eae6';
+      g.fillRect(0, 0, 384, 96);
+      g.fillStyle = '#365565';
+      g.textAlign = 'center';
+      g.font = '500 48px sans-serif';
+      g.fillText(title, 192, 65, 352);
+    });
   const panel = new T.PlaneGeometry();
-  for (const [x0, y0] of [
-    [408, -80],
-    [324, -66],
-    [49, -275],
-    [412, -477],
-    [605, -150],
-    [688, -175],
-    [781, -185],
-    [831, -198],
-  ]) {
-    const s = streets.nearest(x0, y0),
-      dx = Math.sin(s.heading),
-      dy = Math.cos(s.heading);
-    for (const side of [1, -1]) {
-      const off = side * (s.width / 2 + 1.9);
-      const bank = [0, 1.26, 2.42].map((u) => [s.x + dy * off + dx * u, s.y - dx * off + dy * u]);
-      if (bank.some(([x, y]) => streets.onRoad(x, y, 0.53) || !passable(x, y))) continue;
-      const yaw = Math.atan2(-side * dy, side * dx);
-      bank.forEach(([x, y], i) => {
-        const g = terrain(x, y) + 0.205;
-        if (i === 2) {
-          put(boxes, x, y, g + 0.43, 0.52, 0.86, 0.45, yaw, '#839895');
-          put(dark, x - side * dy * 0.225, y + side * dx * 0.225, g + 0.71, 0.27, 0.09, 0.04, yaw);
-        } else {
-          put(boxes, x, y, g + 1.02, 1.14, 2.04, 0.77, yaw, i ? '#9d3440' : '#355c7c');
-          put(faces, x - side * dy * 0.392, y + side * dx * 0.392, g + 1.02, 1.05, 1.9, 1, yaw);
-        }
-      });
-      break;
-    }
+  for (const [kind, id, x, y, nx, ny, lift] of data.fixtures.amenities) {
+    if (kind !== 'vending') continue;
+    const yaw = Math.atan2(nx, -ny),
+      g = terrain(x, y) + lift;
+    put(boxes, x, y, g + 1.02, 1.14, 2.04, 0.77, yaw, Number(id) % 3 ? '#dadbd4' : '#a03c38');
+    put(faces, x + nx * 0.392, y + ny * 0.392, g + 1.02, 1.05, 1.9, 1, yaw);
   }
   const box = new T.BoxGeometry(),
     std = (color, metalness = 0) => new T.MeshStandardMaterial({ color, metalness, roughness: 0.6 });
-  instances(scene, 'Signal and lamp steel', box, std('#97a1a0', 0.38), steel);
-  instances(scene, 'Guard rails', box, std('#c5d3c4'), rail);
-  instances(scene, 'Reflector posts', box, std('#dad8c7'), white);
-  instances(scene, 'Green rail bands', box, std('#3d8063'), green);
-  instances(scene, 'Signal housings', box, std('#263536'), dark);
+  const tube = new T.CylinderGeometry(0.5, 0.5, 1, 12);
+  const galv = std('#929b99', 0.38);
+  instances(scene, 'Mast base plates', tube, std('#555e60', 0.32), shoes);
+  instances(scene, 'Signal and lamp masts', tube, galv, poles, true);
+  instances(scene, 'Signal and lamp arms', box, galv, steel);
+  const visor = new T.CylinderGeometry(0.5, 0.5, 1, 16, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
+  const hoodMat = std('#303937');
+  hoodMat.side = T.DoubleSide;
+  instances(scene, 'Signal visors', visor, hoodMat, hoods);
+  const outline = new T.Shape();
+  outline.moveTo(-0.415, -0.5);
+  outline.lineTo(0.415, -0.5);
+  outline.quadraticCurveTo(0.5, -0.5, 0.5, -0.25);
+  outline.lineTo(0.5, 0.25);
+  outline.quadraticCurveTo(0.5, 0.5, 0.415, 0.5);
+  outline.lineTo(-0.415, 0.5);
+  outline.quadraticCurveTo(-0.5, 0.5, -0.5, 0.25);
+  outline.lineTo(-0.5, -0.25);
+  outline.quadraticCurveTo(-0.5, -0.5, -0.415, -0.5);
+  const housing = new T.ExtrudeGeometry(outline, {
+    depth: 0.94,
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.008,
+    bevelSegments: 2,
+    curveSegments: 5,
+  });
+  housing.translate(0, 0, -0.47);
+  instances(scene, 'Signal housings', housing, std('#303936', 0.2), heads);
+  instances(scene, 'Guard rails', tube.clone().rotateX(Math.PI / 2), std('#c5d3c4'), rail, true);
+  instances(scene, 'Reflector posts', tube, std('#dad8c7'), white, true);
+  instances(scene, 'Green rail bands', tube, std('#3d8063'), green);
+  instances(scene, 'Lamp housings', box, std('#333e3d'), dark);
   const lit = new T.MeshStandardMaterial({ color: '#f1dbad', emissive: '#ffbb65' });
   instances(scene, 'Lanterns & reflectors', box, lit, lamp);
-  const signalMats = ['#2bdba8', '#ffd564', '#ff483e'].map(
-    (c) => new T.MeshStandardMaterial({ color: c, emissive: c }),
+  const lensColor = ['#3bd7b0', '#f8c04f', '#f4483f'];
+  const unlit = ['#253933', '#3e3628', '#422a2a'];
+  const signalMats = beads.map(
+    (_, i) =>
+      new T.MeshStandardMaterial({ color: unlit[i % 3], emissive: lensColor[i % 3], roughness: 0.32 }),
   );
   beads.forEach((v, i) =>
-    instances(scene, 'Signal bulbs ' + i, new T.SphereGeometry(0.5, 8, 6), signalMats[i], v),
+    instances(scene, 'Signal bulbs ' + i, new T.SphereGeometry(0.5, 12, 8), signalMats[i], v),
   );
-  instances(scene, 'Intersection nameplates', box, new T.MeshStandardMaterial({ map: roadSignMap }), signs);
+  for (const [title, rows] of signs)
+    instances(
+      scene,
+      'Intersection ' + title,
+      box,
+      new T.MeshStandardMaterial({ map: roadSignMap(title) }),
+      rows,
+    );
   instances(scene, 'Vending cabinets', box, std('white'), boxes);
   const vending = new T.MeshStandardMaterial({
     map: machineMap,
@@ -174,13 +187,6 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
     side: T.DoubleSide,
   });
   instances(scene, 'Drink displays', panel, vending, faces);
-  const poolMat = new T.MeshBasicMaterial({
-    color: '#ffbe78',
-    map: glow,
-    transparent: true,
-    blending: T.AdditiveBlending,
-    depthWrite: false,
-  });
   const coneMat = new T.MeshBasicMaterial({
     color: '#ffc787',
     transparent: true,
@@ -203,7 +209,6 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
       );
   };
   instances(scene, 'Downward streetlight haze', new T.ConeGeometry(0.5, 1, 12, 6, true), coneMat, cones);
-  instances(scene, 'Warm light on asphalt', new T.PlaneGeometry().rotateX(-Math.PI / 2), poolMat, pools);
   const geo = new T.BufferGeometry();
   geo.setAttribute('position', new T.Float32BufferAttribute(glowPositions, 3));
   const halo = new T.PointsMaterial({
@@ -220,11 +225,14 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
     lit.emissiveIntensity = amount * 2.5;
     halo.opacity = amount * 0.68;
     vending.emissiveIntensity = 0.2 + amount * 0.95;
-    poolMat.opacity = amount * 0.43;
     coneMat.opacity = amount * 0.028;
-    const phase = time % 13;
-    signalMats.forEach(
-      (m, i) => (m.emissiveIntensity = i === (phase < 7 ? 0 : phase < 8.5 ? 1 : 2) ? 2.8 : 0.05),
-    );
+    const phase = time % 24;
+    signalMats.forEach((mat, i) => {
+      const t = (phase + (i < 3 ? 0 : 12)) % 24;
+      const selected = t < 9 ? 0 : t < 11 ? 1 : 2;
+      const on = i % 3 === selected;
+      mat.color.set(on ? lensColor[i % 3] : unlit[i % 3]);
+      mat.emissiveIntensity = on ? 1.36 : 0.012;
+    });
   };
 }

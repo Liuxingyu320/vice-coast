@@ -1,10 +1,10 @@
 import * as T from 'three';
 import frontages from '../../assets/shiba-frontages.json';
-import { instances } from './primitives.js';
+import { instances, canvasMap } from './primitives.js';
 import { makeShopAtlas, brands, cells } from './shop-atlas.js';
 
 // A placement frame has local X along a frontage and local Z facing the street.
-export function furnishAvenue(scene, streets, ground, passable) {
+export async function furnishAvenue(scene, streets, ground, passable, fixtures) {
   const shelters = [],
     cubes = [],
     cylinders = [],
@@ -19,9 +19,8 @@ export function furnishAvenue(scene, streets, ground, passable) {
     shelters: 0,
     bicycles: 0,
     gantries: 0,
-    stoneLanterns: 0,
   };
-  const loc = (x, y, nx, ny) => ({ x, y, z: ground(x, y) + 0.202, yaw: Math.atan2(nx, -ny) });
+  const loc = (x, y, nx, ny) => ({ x, y, z: ground(x, y) + 0.14, yaw: Math.atan2(nx, -ny) });
   const P = (o, u, v) => [
     o.x + Math.cos(o.yaw) * u + Math.sin(o.yaw) * v,
     o.y + Math.sin(o.yaw) * u - Math.cos(o.yaw) * v,
@@ -38,7 +37,11 @@ export function furnishAvenue(scene, streets, ground, passable) {
   }
   function flat(o, u, v, w, h, chart, alt = 0.025) {
     const [x, y] = P(o, u, v);
-    decals.push({ row: [x, ground(x, y) + alt, -y, w, h, 1, o.yaw, undefined, -Math.PI / 2], chart, glow: 0 });
+    decals.push({
+      row: [x, ground(x, y) + alt, -y, w, h, 1, o.yaw, undefined, -Math.PI / 2],
+      chart,
+      glow: 0,
+    });
   }
   function slat(o, u, v, z, w, h, d, col) {
     box(o, u, v, z, w, h, d, col);
@@ -50,8 +53,25 @@ export function furnishAvenue(scene, streets, ground, passable) {
       ink = brands[kind][2],
       w = Math.min(width, 9.8),
       closed = i % 13 === 8;
-    box(o, 0, 0.13, 1.89, w, 3.75, 0.24, '#4c5351');
-    face(o, 0, 0.265, 1.51, w - 0.19, 2.88, closed ? cells.closed : kind, closed ? 0.04 : 0.53);
+    const edgeLevels = [-w / 2, 0, w / 2].map((u) => {
+      const [xx, yy] = P(o, u, 0.32);
+      return ground(xx, yy);
+    });
+    const bottom = Math.min(...edgeLevels) - 0.16;
+    o.z = Math.max(...edgeLevels) + 0.14;
+    const foundationDepth = o.z - bottom;
+    box(o, 0, 0.18, -foundationDepth / 2, w, foundationDepth, 0.36, '#59605e');
+    box(o, 0, 0.12, 1.88, w, 3.76, 0.2, '#3f4542');
+    face(o, 0, 0.228, 1.57, w - 0.2, 2.88, closed ? cells.closed : kind, closed ? 0.02 : 0.31);
+    // Physical reveals and door hardware stay in front of recessed interior glazing.
+    for (const u of [-w * 0.48, w * 0.48]) box(o, u, 0.32, 1.52, 0.11, 2.95, 0.23, '#414b4d');
+    box(o, 0, 0.34, 2.6, w - 0.2, 0.052, 0.13, '#777e7c');
+    box(o, 0, 0.31, 0.35, w - 0.2, 0.07, 0.14, '#636d69');
+    if (!closed) {
+      box(o, w * 0.16, 0.32, 1.52, 0.055, 2.95, 0.16, '#687273');
+      for (const z of [1.0, 1.41]) box(o, w * 0.18, 0.44, z, 0.038, 0.036, 0.14, '#8c9693');
+      box(o, w * 0.18, 0.5, 1.205, 0.036, 0.45, 0.035, '#a8b0a9');
+    }
     box(o, 0, 0.28, 0.12, w, 0.24, 0.24, '#626761');
     for (const u of [-w * 0.49, -w * 0.16, w * 0.49]) box(o, u, 0.3, 1.6, 0.072, 2.96, 0.12, '#7c8785');
     box(o, 0, 0.33, 3.37, w, 0.72, 0.3, '#4c514c');
@@ -81,83 +101,15 @@ export function furnishAvenue(scene, streets, ground, passable) {
       post(o, u + 0.46, 0.32, 0.62, 0.06, 1.02, 0.06, '#8b8d83');
     }
   }
-  // Roadside placements follow the shoulder at each anchor. Off-road checks exclude intersecting carriageways.
-  function shoulder(x, y, side = 1, extra = 1.6) {
-    const s = streets.nearest(x, y),
-      dx = Math.sin(s.heading),
-      dy = Math.cos(s.heading);
-    const nx = side * dy,
-      ny = -side * dx,
-      off = s.width / 2 + extra;
-    const xx = s.x + nx * off,
-      yy = s.y + ny * off;
-    if (streets.onRoad(xx, yy, 0.05) || !passable(xx, yy)) return null;
-    if ([2.8, 5, 7.5, 10].some((d) => streets.onRoad(xx + nx * d, yy + ny * d))) return null;
-    return loc(xx, yy, -nx, -ny);
-  }
-  function choose(x, y, side, extra) {
-    for (const delta of [0, 3, -3, 7, -7, 12, -12, 18, -18]) {
-      const o = shoulder(x + delta, y + delta * 0.3, side, extra);
-      if (o) return o;
-    }
-  }
   function bench(o, u = 0, v = 0) {
     inventory.benches++;
     for (let j = 0; j < 4; j++) slat(o, u, v + j * 0.12, 0.48, 1.72, 0.075, 0.1, '#946d4c');
     for (const j of [0.7, 0.9]) slat(o, u, v - 0.11, j, 1.74, 0.15, 0.07, '#926d4d');
     for (const s of [-0.64, 0.64]) {
-      box(o, u + s, v + 0.16, 0.24, 0.095, 0.48, 0.49, '#454f4c');
+      const [xx, yy] = P(o, u + s, v + 0.16),
+        foot = ground(xx, yy) + o.lift - o.z - 0.012;
+      box(o, u + s, v + 0.16, (0.48 + foot) / 2, 0.095, 0.48 - foot, 0.49, '#454f4c');
       box(o, u + s, v - 0.13, 0.64, 0.07, 0.65, 0.07, '#485250');
-    }
-  }
-  function bin(o, u, v) {
-    box(o, u, v, 0.43, 0.45, 0.86, 0.44, '#586763');
-    box(o, u, v, 0.88, 0.48, 0.055, 0.46, '#9ca59c');
-    box(o, u, v + 0.228, 0.7, 0.28, 0.095, 0.018, '#202d30');
-  }
-  function fixturePoint(x, y, side, extra) {
-    return choose(x, y, side, extra) || choose(x, y, -side, extra);
-  }
-  for (const [k, [x, y]] of [
-    [46, -298],
-    [55, -238],
-    [78, -179],
-    [79, -136],
-    [74, -95],
-    [133, -332],
-    [224, -342],
-    [321, -330],
-    [398, -266],
-    [407, -200],
-    [424, -145],
-  ].entries()) {
-    const o = fixturePoint(x, y, k % 2 ? 1 : -1, 2.45);
-    if (!o) continue;
-    bench(o);
-    bin(o, 1.42, 0.18);
-    if (k % 2 === 0) {
-      for (const u of [-1, 1]) post(o, u - 2.6, -0.18, 1.02, 0.081, 2.04, 0.081, '#536059');
-      box(o, -2.6, -0.18, 1.38, 2.18, 1.27, 0.13, '#596259');
-      face(o, -2.6, -0.106, 1.38, 2.08, 1.16, cells.guide, 0.15);
-    }
-    // Individual granite courses follow the slope at the lawn edge.
-    for (let j = 0; j < 11; j++) {
-      const [xx, yy] = P(o, (j - 5) * 0.76, -0.98);
-      if (!passable(xx, yy) || streets.onRoad(xx, yy, 0.1)) continue;
-      const v = { ...o, x: xx, y: yy, z: ground(xx, yy) };
-      box(v, 0, 0, 0.23, 0.75, 0.46, 0.38, j % 3 ? '#747b74' : '#80857c');
-      box(v, 0, 0, 0.49, 0.76, 0.1, 0.42, '#9a9d90');
-    }
-    if (k % 3 === 0) {
-      inventory.stoneLanterns++;
-      const u = 3.18;
-      box(o, u, -0.12, 0.13, 0.73, 0.26, 0.72, '#828577');
-      post(o, u, -0.12, 0.57, 0.32, 0.72, 0.32, '#777d74');
-      box(o, u, -0.12, 1.01, 0.59, 0.17, 0.58, '#8e9385');
-      box(o, u, -0.12, 1.27, 0.43, 0.39, 0.43, '#a29c80');
-      for (const s of [-1, 1]) box(o, u + s * 0.2, -0.12, 1.27, 0.07, 0.43, 0.46, '#6c716b');
-      part(cones, o, u, -0.12, 1.64, 0.92, 0.4, 0.92, '#737a72', Math.PI / 4);
-      part(balls, o, u, -0.12, 1.91, 0.22, 0.26, 0.22, '#777c73');
     }
   }
   function bike(o, u, v) {
@@ -165,7 +117,7 @@ export function furnishAvenue(scene, streets, ground, passable) {
     const tire = '#394042',
       metal = '#8e9c9b';
     const [bx, by] = P(o, u, v);
-    o = { ...o, x: bx, y: by, z: ground(bx, by) + 0.207 };
+    o = { ...o, x: bx, y: by, z: ground(bx, by) + o.lift };
     u = 0;
     v = 0;
     for (const q of [-0.56, 0.56]) {
@@ -208,72 +160,79 @@ export function furnishAvenue(scene, streets, ground, passable) {
     for (const side of [-1, 1]) box(o, 0.52, side * 0.13, 0.77, 0.3, 0.11, 0.014, '#82908c');
     box(o, 0.52, 0, 0.716, 0.3, 0.018, 0.27, '#737f7c');
   }
-  for (const [k, [x, y]] of [
-    [29, -313],
-    [49, -241],
-    [400, -206],
-    [454, -150],
-    [572, -165],
-    [679, -176],
-    [756, -185],
-    [860, -184],
-    [820, -168],
-  ].entries()) {
-    const o = fixturePoint(x, y, 1, 2.16);
-    if (!o) continue;
-    for (let j = 0; j < 3; j++) bike(o, j * 1.91 - 1.85, -0.12);
-    box(o, 3.6, -0.08, 0.69, 0.82, 1.38, 0.54, '#667872');
-    for (const side of [-1, 1]) {
-      box(o, 3.6, -0.08 + side * 0.275, 0.69, 0.73, 1.23, 0.033, '#82908a');
-      for (let j = 0; j < 5; j++)
-        box(o, 3.6, -0.08 + side * 0.3, 0.34 + 0.055 * j, 0.57, 0.021, 0.023, '#515e5b');
-      box(o, 3.85, -0.08 + side * 0.3, 0.88, 0.028, 0.114, 0.026, '#485553');
+  for (const [kind, id, x, y, nx, ny, lift, label, hasBench] of fixtures.amenities) {
+    const o = { ...loc(x, y, nx, ny), z: ground(x, y) + lift, lift };
+    if (kind === 'bench') {
+      bench(o);
+      continue;
     }
-    if (k % 2 === 0) {
-      post(o, -3.0, 0, 0.44, 0.17, 0.88, 0.17, '#555c58');
-      box(o, -3, 0, 0.99, 0.51, 0.69, 0.43, '#b54032');
-      box(o, -3, 0.22, 1.13, 0.31, 0.06, 0.035, '#503d38');
-      box(o, -3, 0.23, 0.91, 0.15, 0.035, 0.03, '#f2d6b4');
+    if (kind === 'bikes') {
+      for (const u of [-1.86, 0, 1.86]) bike(o, u, 0);
+      continue;
     }
-    for (let j = 0; j < 2; j++) {
-      const u = 4.58 + j * 0.65;
-      box(o, u, 0, 0.035, 0.38, 0.07, 0.38, '#534b42');
-      part(cones, o, u, 0, 0.31, 0.34, 0.58, 0.34, '#d66737');
-      post(o, u, 0, 0.32, 0.17, 0.096, 0.17, '#e1d5bc');
+    if (kind === 'post') {
+      post(o, 0, 0, 0.37, 0.17, 0.74, 0.17, '#565f5a');
+      box(o, 0, 0, 0.99, 0.53, 0.74, 0.46, '#b64032');
+      box(o, 0, 0.235, 1.15, 0.35, 0.061, 0.026, '#443c37');
+      continue;
     }
-  }
-  for (const [x, y] of [
-    [44, -282],
-    [403, -207],
-    [622, -170],
-    [795, -190],
-  ]) {
-    const o = fixturePoint(x, y, 1, 2.2);
-    if (!o) continue;
+    if (kind === 'stopPole') {
+      post(o, 0, 0, 1.1, 0.078, 2.24, 0.078, '#737d7c');
+      box(o, 0, 0, 1.58, 0.47, 0.94, 0.08, '#e1dfce');
+      face(o, 0, 0.044, 1.58, 0.45, 0.92, 25, 0.08);
+      continue;
+    }
+    if (kind !== 'shelter') continue;
     inventory.shelters++;
     for (const u of [-2.3, 2.3]) {
-      post(o, u, -0.36, 1.32, 0.095, 2.64, 0.095, '#667676');
+      const [xx, yy] = P(o, u, -0.36),
+        support = ground(xx, yy) + lift,
+        top = o.z + 2.64;
+      post(o, u, -0.36, (support + top) / 2 - o.z, 0.095, top - support, 0.095, '#667676');
       box(o, u, -0.18, 2.54, 0.09, 0.12, 1.68, '#677676');
     }
     part(shelters, o, 0.35, -0.39, 1.39, 3.05, 2.19, 0.032, '#b4cbd1');
     box(o, 0, -0.1, 2.67, 5.1, 0.16, 1.9, '#758582');
     box(o, -1.73, -0.3, 1.4, 1.11, 2.18, 0.14, '#455355');
-    face(o, -1.73, -0.21, 1.4, 1, 2.03, 25, 1.1);
-    bench(o, 0.48, -0.2);
+    face(o, -1.73, -0.21, 1.4, 1, 2.03, 25, 0.12);
+    if (hasBench) bench(o, 0.48, -0.2);
   }
-  for (const [x, y, side] of [
-    [61, -229, 1],
-    [495, -158, -1],
-    [733, -181, 1],
-  ]) {
-    const o = fixturePoint(x, y, side, 1.25);
-    if (!o) continue;
+  for (const [index, [x, y, z, dx, dy]] of fixtures.gantries.entries()) {
+    const o = { ...loc(x, y, -dy, dx), z };
     inventory.gantries++;
     post(o, 0, 0, 3.65, 0.24, 7.3, 0.24, '#83908d');
     box(o, 0, 2.72, 7.14, 0.18, 0.19, 5.6, '#879392');
     box(o, 0, 3.3, 6.22, 0.2, 1.76, 4.35, '#5c666b');
-    face(o, 0.111, 3.3, 6.22, 4.23, 1.64, 24, 0.26, Math.PI / 2);
-    face(o, -0.111, 3.3, 6.22, 4.23, 1.64, 24, 0.26, -Math.PI / 2);
+    for (const [side, lines] of fixtures.guideFaces[index].entries()) {
+      if (!lines.length) continue;
+      const direction = side ? -1 : 1;
+      const map = canvasMap(768, 296, (g) => {
+        g.fillStyle = '#24558b';
+        g.fillRect(0, 0, 768, 296);
+        g.strokeStyle = '#c5d4dc';
+        g.lineWidth = 4;
+        g.strokeRect(9, 9, 750, 278);
+        for (const [i, [arrow, japanese, roman]] of lines.entries()) {
+          const y = lines.length === 1 ? 114 : 66 + i * 123;
+          g.fillStyle = '#f0f3ee';
+          g.font = 'bold 76px sans-serif';
+          g.fillText(arrow, 27, y + 23);
+          g.font = '600 51px sans-serif';
+          g.fillText(japanese, 135, y + 11);
+          g.font = '28px sans-serif';
+          g.fillText(roman, 139, y + 49);
+        }
+      });
+      const [X, Y] = P(o, direction * 0.111, 3.3),
+        yaw = o.yaw + (direction * Math.PI) / 2;
+      instances(
+        scene,
+        'Route guide ' + index + ' ' + side,
+        new T.PlaneGeometry(),
+        new T.MeshStandardMaterial({ map, roughness: 0.79 }),
+        [[X, z + 6.22, -Y, 4.23, 1.64, 1, yaw]],
+      );
+    }
   }
   for (const r of streets.roads)
     for (const s of r.segments) {
@@ -287,12 +246,19 @@ export function furnishAvenue(scene, streets, ground, passable) {
           (x > 130 && x < 399 && Math.abs(y + 333) < 20);
         if (!axis) continue;
         const o = loc(x, y, s.dy, -s.dx);
-        flat(o, 0, r.width * 0.5 - 0.35, 0.57, 0.34, 27, 0.12);
-        if (t === 4) flat(o, 0, 1.24, 0.61, 0.61, 26, 0.12);
+        flat(o, 0, r.width * 0.5 - 0.35, 0.57, 0.34, 27, 0.003);
+        if (t === 4) flat(o, 0, 1.24, 0.61, 0.61, 26, 0.003);
       }
     }
   const steel = new T.MeshStandardMaterial({ roughness: 0.71, metalness: 0.06 });
-  instances(scene, 'Avenue • joinery, shop fittings and street furniture', new T.BoxGeometry(), steel, cubes);
+  instances(
+    scene,
+    'Avenue • joinery, shop fittings and street furniture',
+    new T.BoxGeometry(),
+    steel,
+    cubes,
+    true,
+  );
   instances(scene, 'Avenue • posts', new T.CylinderGeometry(0.5, 0.5, 1, 10), steel, cylinders);
   instances(scene, 'Avenue • cones and stone caps', new T.ConeGeometry(0.5, 1, 8), steel, cones);
   instances(scene, 'Avenue • bicycle wheels', new T.TorusGeometry(0.47, 0.035, 6, 24), steel, rings);
@@ -310,7 +276,7 @@ export function furnishAvenue(scene, streets, ground, passable) {
     }),
     shelters,
   );
-  const chart = makeShopAtlas(),
+  const chart = await makeShopAtlas(),
     evening = { value: 0.75 };
   function panels(name, list) {
     const geo = new T.PlaneGeometry();
