@@ -4,7 +4,7 @@ import {personDetail,animatePerson} from './people.js';
 
 const point=(x,z,label)=>({x,z,label,type:'chapter'});
 const spots={
- new:point(145,54.2,'到海浪唱片找玛拉'),door:point(69.6,-113.8,'在火烈鸟正门找妮娜'),
+ new:point(145,54.2,'到海浪唱片找玛拉'),door:point(65.4,-108.1,'在火烈鸟正门找妮娜'),
  bar:point(46,-104.6,'到后院吧台找鼓手蒂托'),needle:point(42.1,-128.5,'在调音台放老维克的唱片'),
  crew:point(localStops.crew.x,localStops.crew.z,'去后巷找搬运工帕兹'),haul:point(55,-100,'从装货门把音箱送到黄线旁'),
  card:point(41.8,-131.75,'到调音台拿调频磁卡'),dial:point(localStops.dial.x,localStops.dial.z,'在日落码头调试流动电台'),offer:point(187,-127.5,'和雷蒙谈午夜时段'),
@@ -98,7 +98,7 @@ export class MidnightDistrict{
  }
  update(dt,dialogue){
   const {s,set,sim,host}=this,p=sim.pos,t=host.clock;
-  sim.world.venues.setLoadingDoor(s.pass);sim.walkScale=s.stage==='haul'?.7:1;
+  sim.world.venues.setLoadingDoor(s.pass&&this.save.chapter.ending!=='keep');sim.walkScale=s.stage==='haul'?.7:1;
   set.amp.visible=['crew','haul'].includes(s.stage);set.pass.visible=s.stage==='card';set.bag.visible=s.bag==='looking';set.photo.visible=s.bag==='returned';
   set.crate.visible=['idle','carrying'].includes(s.vinyl);set.beacon.scale.setScalar(.91+.17*Math.sin(t*3));set.beacon.material.color.setHex(s.outcome==='live'?0x95edcf:0xff847d);
   const carry=(obj,side)=>{obj.rotation.y=p.a;const back=sim.inCar?(sim.carSpec.cargoBack??1.45):.09;obj.position.set(p.x+side*Math.cos(p.a)+back*Math.sin(p.a),sim.inCar?(sim.car.userData.model===2?2.48:sim.carSpec.cargoHeight??.99):.49,p.z-side*Math.sin(p.a)+back*Math.cos(p.a))};

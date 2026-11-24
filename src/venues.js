@@ -79,8 +79,10 @@ export function createVenues(scene,colliders,footprints){
   for(let j=0;j<20;j++)b(143.81,3.37,44.47+j,2.35,.12,1,j%2?0xf2d5b0:0xba655b,0,0,-.095);
   for(const zz of [52.04,56.05]){b(143.78,1.78,zz,.24,3.2,.18,0x735446);b(143.89,1.73,zz,.16,2.95,.055,brass)}
   const door=new T.MeshStandardMaterial({color:0x91b6b7,transparent:true,opacity:.31,side:T.DoubleSide});
-  geo.add(plane,142.05,1.72,55.93,1.8,2.89,1,0xffffff,0,.1,0,door);
-  b(142.1,1.24,55.88,.5,.06,.09,brass);
+  // Hinged on the north jamb and swung into the shop, so the threshold reads open.
+  geo.add(plane,142.30,1.72,56.985,1.8,2.89,1,0xffffff,0,-Math.PI/2-.28,0,door);
+  b(142.02,1.24,57.62,.09,.06,.3,brass);
+  colliders.push({x:142.28,z:57.02,w:.32,d:.78});
   for(const zz of [46.5,61.6]){
    print(143.80,4.75,zz,3.2,.69,east,letterPanel(zz<50?'33 RPM':'SIDE B','ANALOG SOUND','#234e50','#f3c092'));
    b(143.81,1.67,zz,.12,1.25,.95,wood);print(143.88,1.67,zz,.84,1.14,east,recordMats[zz<50?2:4]);
@@ -116,7 +118,7 @@ export function createVenues(scene,colliders,footprints){
   b(left,8.86,-120,19,.46,49,cream);for(const zz of [-138,-131,-124,-117,-110,-103]){b(31.16,5.1,zz,.36,4.5,3.7,0x55657a);for(const y of [3.8,5.6])b(31.45,y,zz,.38,.14,4.2,cream)}
   for(const y of [7.45,7.77,8.10])lights.b(31.36,y,-120,.39,.13,48,0xff9c9d,0,0,0,true);
   lights.add(plane,31.42,6.85,-120,14,2.8,1,0xffffff,0,east,0,letterPanel('Flamingo','SOCIAL CLUB   /   LEONIDA SESSIONS','#5c394e','#ffd2bc'));
-  for(const [xx,zz,ww,dd] of [[50,back,36,.55],[42.25,-97,20.5,.55],[62.75,-97,10.5,.55],[67.7,-130,.5,26],[67.7,-103,.5,11]]){
+  for(const [xx,zz,ww,dd] of [[49,back,38,.55],[41.25,-97,22.5,.55],[62.75,-97,10.5,.55],[67.7,-130,.5,26],[67.7,-103,.5,11]]){
    wall(xx,.86,zz,ww,1.25,dd,0xc29488);b(xx,1.56,zz,ww+.12,.16,dd+.12,cream);
   }
   for(const z of [-117,-109]){wall(67.65,1.6,z,.78,2.8,.84,0x877781);lights.b(67.65,3.15,z,.86,.16,.92,0xfab5a9,0,0,0,true)}

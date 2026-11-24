@@ -14,11 +14,14 @@ export function layoutCircuit(spec){
   markers.push(samples.at(-1).s);
  }
  push(raw[0]);const length=samples.at(-1).s;
+ const pose=[{x:0,z:0,a:0,dx:1,dz:0},{x:0,z:0,a:0,dx:1,dz:0}];let poseSlot=0;
  function at(distance,lane=0){
   const s=((distance%length)+length)%length;let lo=0,hi=samples.length-1;
   while(lo+1<hi){const mid=(lo+hi)>>1;if(samples[mid].s<=s)lo=mid;else hi=mid}
-  const a=samples[lo],b=samples[hi],n=b.s-a.s,dx=(b.x-a.x)/n,dz=(b.z-a.z)/n,p=mix(a,b,(s-a.s)/n);
-  return {x:p.x-dz*lane,z:p.z+dx*lane,a:Math.atan2(-dx,-dz),dx,dz};
+  const a=samples[lo],b=samples[hi],n=b.s-a.s,dx=(b.x-a.x)/n,dz=(b.z-a.z)/n,t=(s-a.s)/n;
+  const out=pose[poseSlot];poseSlot^=1;
+  out.x=a.x+(b.x-a.x)*t-dz*lane;out.z=a.z+(b.z-a.z)*t+dx*lane;out.a=Math.atan2(-dx,-dz);out.dx=dx;out.dz=dz;
+  return out;
  }
  const distances=[];let last=0;for(const s of [...markers,length]){const chunks=Math.ceil((s-last)/87);
   for(let j=1;j<=chunks;j++)distances.push(last+(s-last)*j/chunks);last=s}
@@ -34,7 +37,7 @@ export class StreetRace{
   this.cars=rivals.map((r,i)=>{const car=makeRival(r.color,i%2);this.root.add(car);
    const badge=nameplate(r.name,'#'+r.color.toString(16).padStart(6,'0'));badge.scale.set(1.75,.47,1);badge.position.y=2.45;car.add(badge);
    const trail=new T.Group(),mat=new T.MeshBasicMaterial({color:0x82f8e3,transparent:true,opacity:.54,depthWrite:false});for(const side of [-1,1]){const line=mesh(trail,new T.BoxGeometry(.055,.035,4.2),mat,side*1.03,.42,4.2);line.rotation.y=side*.055}car.add(trail);trail.visible=false;
-   return {car,trail,...r,s:0,v:0,finished:0,contact:0}});
+   return {car,trail,...r,s:0,v:0,finished:0,stepDX:0,stepDZ:0}});
   this.gate=new T.Group();this.root.add(this.gate);const mint=new T.MeshBasicMaterial({color:0x66efd7}),white=new T.MeshBasicMaterial({color:0xffebbc});
   for(const x of [-8.8,8.8]){mesh(this.gate,new T.BoxGeometry(.3,3.7,.35),mint,x,1.9,0);mesh(this.gate,new T.BoxGeometry(.7,.38,.72),white,x,.25,0)}
   const tex=canvasTexture(256,32,(c,w,h)=>{for(let x=0;x<16;x++)for(let y=0;y<2;y++){c.fillStyle=(x+y)%2?'#212438':'#fff0cf';c.fillRect(x*16,y*16,16,16)}});
@@ -47,8 +50,12 @@ export class StreetRace{
  start(spec,sim){
   this.spec=spec;this.track=layoutCircuit(spec);this.active=true;this.root.visible=true;
   this.passed=0;this.time=0;this.countdown=3;this.rank=4;this.draft=false;this.previous=null;
-  const start=this.track.at(-3,3.7);sim.gridStart(start);
-  this.cars.forEach((r,i)=>{r.s=[7,4,.5][i];r.v=0;r.finished=0;r.contact=0;r.trail.visible=false;this.place(r)});
+  const start=this.track.at(-4.8,3.7);sim.gridStart(start);
+  this.sim=sim;sim.raceTraffic=this;
+  this.cars.forEach((r,i)=>{
+   r.s=[7,4,.5][i];r.v=0;r.finished=0;r.stepDX=r.stepDZ=0;r.trail.visible=false;
+   sim.resetVehicleMotion(r.car);this.place(r);
+  });
   for(const obj of this.turnHints)obj.removeFromParent();this.turnHints=[];
   for(let i=1;i<spec.points.length;i++){const [x,z]=spec.points[i],[px,pz]=spec.points[i-1],[nx,nz]=spec.points[(i+1)%spec.points.length];const len=Math.hypot(x-px,z-pz),dx=(x-px)/len,dz=(z-pz)/len;
    const dir=dx*(nz-z)-dz*(nx-x)>0?1:-1;for(const advance of [38,17]){const side=dir*8.7;const sign=mesh(this.root,this.turnGeo,this.turnMats[dir>0?0:1],x-dx*advance-dz*side,2.1,z-dz*advance+dx*side);sign.rotation.y=Math.atan2(-dx,-dz);this.turnHints.push(sign)}}
@@ -63,23 +70,41 @@ export class StreetRace{
   const p=at(start),q=at(end),dx=q.x-p.x,dz=q.z-p.z;const t=clamp(((pos.x-p.x)*dx+(pos.z-p.z)*dz)/(dx*dx+dz*dz||1),0,.9999);
   return Math.floor(this.passed/gates.length)*length+start+(end-start)*t;
  }
+ prepareTraffic(dt){
+  return this.cars.map(r=>{
+   const mesh=r.car;
+   r.stepDX=r.stepDZ=0;
+   if(this.countdown>0)return {mesh,rival:r};
+   const here=this.track.at(r.s,r.lane),ahead=this.track.at(r.s+9);
+   const bend=1-Math.abs(here.dx*ahead.dx+here.dz*ahead.dz);
+   const target=this.spec.pace*r.pace*(1-.43*bend)*(1+.022*Math.sin(r.s*.043+r.lane));
+   r.v+=clamp(target-r.v,-12*dt,6*dt);
+   const rate=r.finished?(r.s<this.track.length*this.spec.laps+14?4:0):r.v;
+   const {dx,dz,a}=here,p=mesh.position;
+   const correction=clamp((here.x-p.x)*-dz+(here.z-p.z)*dx,-2.6,2.6)*2.4;
+   r.stepFX=dx;r.stepFZ=dz;
+   const turn=Math.atan2(Math.sin(a-mesh.rotation.y),Math.cos(a-mesh.rotation.y));
+   return {mesh,vx:rate*dx-correction*dz,vz:rate*dz+correction*dx,
+    a:mesh.rotation.y+clamp(turn,-3.7*dt,3.7*dt),rival:r};
+  });
+ }
  update(dt,sim){
   if(this.countdown>0){this.countdown=Math.max(0,this.countdown-dt);return null}
-  this.time+=dt;const max=this.track.length*this.spec.laps,progress=this.progress(sim.pos);this.draft=false;
+  this.time+=dt;const max=this.track.length*this.spec.laps;this.draft=false;
   for(const r of this.cars){
-   if(!r.finished){const here=this.track.at(r.s),ahead=this.track.at(r.s+9),bend=1-Math.abs(here.dx*ahead.dx+here.dz*ahead.dz);
-    const target=this.spec.pace*r.pace*(1-.43*bend)*(1+.022*Math.sin(r.s*.043+r.lane));r.v+=clamp(target-r.v,-12*dt,6*dt);
-    r.s+=r.v*dt;if(r.s>=max)r.finished=this.time-(r.s-max)/Math.max(1,r.v);this.place(r);
-   }else if(r.s<max+14){r.s+=dt*4;this.place(r)}
+   const advance=clamp(r.stepDX*r.stepFX+r.stepDZ*r.stepFZ,0,60*dt);
+   r.s+=advance;
+   if(!r.finished&&r.s>=max)r.finished=this.time-(r.s-max)*dt/Math.max(.0001,advance);
    const dx=r.car.position.x-sim.pos.x,dz=r.car.position.z-sim.pos.z,forward=-Math.sin(sim.pos.a)*dx-Math.cos(sim.pos.a)*dz,lateral=Math.abs(Math.cos(sim.pos.a)*dx-Math.sin(sim.pos.a)*dz);
    r.trail.visible=forward>3.2&&forward<16&&lateral<2.7&&sim.speed>8&&Math.cos(sim.pos.a-r.car.rotation.y)>.75;if(r.trail.visible)this.draft=true;
-   r.contact=Math.max(0,r.contact-dt);if(Math.abs(forward)<3.6&&lateral<1.7&&sim.speed>4&&r.contact===0){sim.speed*=.82;sim.shake=.5;r.contact=.85}
   }
   if(this.draft)sim.boost=Math.min(1,sim.boost+dt*.16);
-  this.rank=1+this.cars.filter(r=>r.s>progress).length;
+  const progress=this.progress(sim.pos);let ahead=0;
+  for(const r of this.cars)if(r.s>progress)ahead++;this.rank=1+ahead;
   const g=this.target,p=sim.pos,dx=p.x-g.x,dz=p.z-g.z,along=dx*g.dx+dz*g.dz,across=Math.abs(dx*g.dz-dz*g.dx);
   const before=this.previous?((this.previous.x-g.x)*g.dx+(this.previous.z-g.z)*g.dz):-1;
-  const advancing=this.previous&&(p.x-this.previous.x)*g.dx+(p.z-this.previous.z)*g.dz>.00001;this.previous={x:p.x,z:p.z};
+  const advancing=this.previous&&(p.x-this.previous.x)*g.dx+(p.z-this.previous.z)*g.dz>.00001;
+  if(!this.pose)this.pose={x:0,z:0};this.pose.x=p.x;this.pose.z=p.z;this.previous=this.pose;
   if(!advancing||across>10||along<-.7||along>4.8||before>3.8||sim.speed<.2)return null;
   this.passed++;if(this.passed===this.track.gates.length*this.spec.laps){
    const rank=1+this.cars.filter(r=>r.finished&&r.finished<=this.time).length;
@@ -87,5 +112,5 @@ export class StreetRace{
   }
   this.updateGate();return null;
  }
- stop(){this.active=false;this.root.visible=false;this.draft=false}
+ stop(){this.active=false;this.root.visible=false;this.draft=false;if(this.sim?.raceTraffic===this)this.sim.raceTraffic=null;this.sim=null}
 }

@@ -18,7 +18,7 @@ export class StreetRadio{
  constructor(sim,save,api){
   this.sim=sim;this.save=save;this.api=api;this.mode='off';this.crowd=[];this.dissolve=0;this.kit=null;
   $('airToggle').onclick=()=>this.toggle();$('airStart').onclick=()=>this.start();
-  $('airDial').oninput=()=>{$('airDialValue').value=(Number($('airDial').value)/10).toFixed(1)};
+  $('airDial').oninput=()=>{const value=Number($('airDial').value);$('airDialValue').value=(value/10).toFixed(1);if(this.mode==='setup'){this.mistuned=value!==984;this.hud()}};
  }
  get canUse(){return this.sim.inCar&&this.sim.car.userData.model===2&&Math.abs(this.sim.speed)<1&&!this.sim.heat&&this.api.free()}
  tracks(){
@@ -69,17 +69,20 @@ export class StreetRadio{
   if(report&&wasLive)this.api.toast(this.zone+'收线　·　本场听众打赏 $'+this.earned,4);this.hud();
  }
  hud(){
-  const active=this.mode!=='off';$('airToggle').hidden=!active&&!this.canUse;$('airToggle').lastElementChild.textContent=active?'收天线':'街头开播';
-  $('airBox').hidden=!active;if(!active)return;
-  $('airLabel').textContent=this.mode==='live'?'● LIVE　/　'+this.zone:'PALM WAVE　/　流动转播';
-  if(this.mode==='setup')$('airStatus').textContent=this.mistuned?'还有杂音。把指针对准 98.4 MHz。':'选一张唱片，把接收机调到 98.4 MHz。';
-  if(this.mode==='locking')$('airStatus').textContent='天线正在锁频　'+Math.max(0,Math.ceil(5-this.age))+' s';
-  if(this.mode==='live')$('airStatus').textContent='打赏 $'+this.earned+'　·　'+(this.age<20?'听众点歌中':this.age<34?'街坊正赶来围观':'本轮时段即将结束');
+  const active=this.mode!=='off',toggle=$('airToggle'),box=$('airBox');
+  toggle.hidden=!active&&!this.canUse;
+  const toggleLabel=active?'收天线':'街头开播';
+  if(this._toggleLabel!==toggleLabel){this._toggleLabel=toggleLabel;toggle.lastElementChild.textContent=toggleLabel}
+  box.hidden=!active;if(!active)return;
+  const label=this.mode==='live'?'● LIVE　/　'+this.zone:'PALM WAVE　/　流动转播';
+  const status=this.mode==='setup'?(this.mistuned?'还有杂音。把指针对准 98.4 MHz。':'选一张唱片，把接收机调到 98.4 MHz。'):this.mode==='locking'?'天线正在锁频　'+Math.max(0,Math.ceil(5-this.age))+' s':this.mode==='live'?'打赏 $'+this.earned+'　·　'+(this.age<20?'听众点歌中':this.age<34?'街坊正赶来围观':'本轮时段即将结束'):'';
+  if(this._airLabel!==label){this._airLabel=label;$('airLabel').textContent=label}
+  if(status&&this._airStatus!==status){this._airStatus=status;$('airStatus').textContent=status}
  }
  update(dt){
   if(!this.canUse&&this.mode!=='off')this.stop(true);
-  if(this.mode==='off'){if(this.dissolve>0){this.dissolve-=dt;this.audience(dt,true)}return}
-  if(this.mode==='setup')return;
+  if(this.mode!=='live'&&this.dissolve>0){this.dissolve-=dt;this.audience(dt,true)}
+  if(this.mode==='off'||this.mode==='setup')return;
   this.age+=dt;this.kit.lamp.scale.setScalar(.88+.25*Math.sin(this.age*Math.PI*3));
   if(this.mode==='locking'&&this.age>=5){
    this.mode='live';this.age=0;this.sim.livePos={...this.sim.pos};this.sim.airTrack=this.track;this.arrive();this.api.chime();this.api.toast('正在播出《'+$('airTrack').selectedOptions[0].textContent+'》',3);

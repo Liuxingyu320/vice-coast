@@ -1,23 +1,23 @@
 // The first three indices are part of the original vehicle save format.
 export const vehicles=[
- {key:'marlin',name:'MARLIN TURBO'},
- {key:'solano',name:'SOLANO GT'},
- {key:'van',name:'PALM WAVE · 转播车',cargoHeight:2.62},
+ {key:'marlin',name:'MARLIN TURBO',length:4.6,width:2.18},
+ {key:'solano',name:'SOLANO GT',length:4.55,width:2.18},
+ {key:'van',name:'PALM WAVE · 转播车',cargoHeight:2.62,length:4.79,width:2.5},
  ...[
-  ['pelican','鹈鹕敞篷',0xe48585,151.5,37,1.04,1.04,.88,1.57],
-  ['nara','木饰旅行车',0x598e88,151.5,118,.92,.94,1.68,1.18],
-  ['rook','棋格出租车',0xedb647,151.5,99,.96,.96,.98,1.76],
-  ['barranca','湾岸皮卡',0x548aaa,169.95,-182,.89,.90,1.09,1.38],
-  ['marea','潮汐露营车',0xc79b77,169.95,-59,.78,.83,2.43,.88],
-  ['bahia','海湾越野车',0xafbc80,169.95,-46,.95,1.03,1.91,.82],
-  ['cricket','蟋蟀微型车',0x98bda3,151.5,18,1.08,1.16,1.60,.65],
-  ['jetty','栈桥沙滩车',0xeab25f,169.95,-21,1.12,1.14,.88,1.17],
-  ['lido','里维埃拉巡航车',0x84bed0,72.4,-64,.89,.87,.93,1.79],
-  ['horizon','地平线拉力车',0xc27061,72.4,-42,1.13,1.08,1.15,1.55],
-  ['mercado','市集厢式货车',0x8daca1,72.4,-21,.77,.84,2.35,1.25]
- ].map(([key,name,color,x,z,power,steering,cargoHeight,cargoBack],i)=>({
+  ['pelican','鹈鹕敞篷',0xe48585,151.5,37,1.04,1.04,.88,1.57,4.5,1.82],
+  ['nara','木饰旅行车',0x598e88,151.5,118,.92,.94,1.68,1.18,4.98,1.92],
+  ['rook','棋格出租车',0xedb647,151.5,99,.96,.96,.98,1.76,4.86,1.9],
+  ['barranca','湾岸皮卡',0x548aaa,169.95,-182,.89,.90,1.09,1.38,4.85,2],
+  ['marea','潮汐露营车',0xc79b77,169.95,-59,.78,.83,2.43,.88,4.72,2],
+  ['bahia','海湾越野车',0xafbc80,169.95,-46,.95,1.03,1.91,.82,3.89,1.9],
+  ['cricket','蟋蟀微型车',0x98bda3,151.5,18,1.08,1.16,1.60,.65,3.19,1.6],
+  ['jetty','栈桥沙滩车',0xeab25f,169.95,-21,1.12,1.14,.88,1.17,3.42,1.82],
+  ['lido','里维埃拉巡航车',0x84bed0,72.4,-64,.89,.87,.93,1.79,5.18,1.98],
+  ['horizon','地平线拉力车',0xc27061,72.4,-42,1.13,1.08,1.15,1.55,3.97,1.78],
+  ['mercado','市集厢式货车',0x8daca1,72.4,-21,.77,.84,2.35,1.25,4.91,2.04]
+ ].map(([key,name,color,x,z,power,steering,cargoHeight,cargoBack,length,width],i)=>({
   key,name,color,x,z,a:x<160?Math.PI:0,power,steering,cargoHeight,cargoBack,parkingId:17+i,
-  seatHeight:key==='pelican'?.46:key==='jetty'?.41:null
+  seatHeight:key==='pelican'?.46:key==='jetty'?.41:null,length,width
  }))
 ];
 export const additions=vehicles.slice(3);
