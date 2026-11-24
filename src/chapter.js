@@ -11,9 +11,9 @@ const places={
  ride:point(69.6,-113.8,'和玛拉去火烈鸟俱乐部后院'),deal:point(52,-122,'找卡洛斯谈条件'),
  mix:point(42.1,-130.2,'到调音台找玛拉'),stand:point(43,-123.6,'走上舞台，使用立麦'),
  board:point(56.5,-110,'侧台灯光台'),case:point(48,-118.4,'到长桌取回母带箱'),escape:point(65.4,-108.1,'带玛拉离开，或找门房核对封套'),
- return:point(178,-127,'到日落码头找老维克'),farewell:point(178,-127,'和老维克告别'),shop:point(139.4,52.35,'回访海浪唱片'),club:point(69.6,-113.8,'回访火烈鸟后院')
+ return:point(178,-127,'到潮见码头找老维克'),farewell:point(178,-127,'和老维克告别'),shop:point(139.4,52.35,'回访波音唱片'),club:point(69.6,-113.8,'回访火烈鸟后院')
 };
-const names={mara:['玛拉','MARA SOTO  /  录音师'],vic:['老维克','VIC RIVERA  /  海浪唱片'],carlos:['卡洛斯','CARLOS VEGA  /  俱乐部经理'],door:['妮娜','NINA CRUZ  /  看场人'],mic:['里科','RICO  /  舞台立麦'],sleeve:['首版封套','WAVE RECORDS  /  ARCHIVE 02'],case:['母带箱','MASTER REEL  /  02'],board:['灯光台','LIGHTING DESK  /  FLAMINGO']};
+const names={mara:['玛拉','MARA SOTO  /  录音师'],vic:['老维克','VIC RIVERA  /  波音唱片'],carlos:['卡洛斯','CARLOS VEGA  /  俱乐部经理'],door:['妮娜','NINA CRUZ  /  看场人'],mic:['里科','RICO  /  舞台立麦'],sleeve:['首版封套','WAVE RECORDS  /  ARCHIVE 02'],case:['母带箱','MASTER REEL  /  02'],board:['灯光台','LIGHTING DESK  /  FLAMINGO']};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 function prop(group,size,mat,x,y,z){const mesh=new T.Mesh(new T.BoxGeometry(...size),new T.MeshStandardMaterial({color:mat,roughness:.64}));mesh.position.set(x,y,z);group.add(mesh);return mesh}
 function equipment(scene){
@@ -67,7 +67,7 @@ export class LedgerChapter{
  get journal(){
   const s=this.s;if(s.stage==='done')return s.ending==='return'?'私账已经归还。老维克替你谈妥了车库八折。':'你和玛拉分了现金。火烈鸟俱乐部记住了你的面孔。';
   if(s.stage==='party')return '可以找卡洛斯谈、帮玛拉混音，或使用舞台立麦。后院入口旁的灯光台还能试一次黑场。';
-  return this.target?.label??'海景大道的唱片店，还有人等着你。';
+  return this.target?.label??'湾岸通的唱片店，还有人等着你。';
  }
  activate(){
   const s=this.s;s.active=true;
@@ -99,7 +99,7 @@ export class LedgerChapter{
  close(){if(!this.talk)return;this.talk=null;this.mixer=null;this.town.close();this.keyLight.visible=false;this.rim.visible=false;this.listener.visible=false;this.sim.hero.visible=!this.sim.inCar;this.api.hide();this.sim.resetCamera()}
  say(who,line,choices){
   const same=this.talk?.who===who;
-  this.talk={who,line,choices};this.api.dialogue(names[who]??midnightSpeakers[who]??streetVoices[who]??({deckPress:['后台唱盘','FLAMINGO / DECK B'],frequencyCard:['调频磁卡','PALM WAVE / ENGINEERING'],canvasBag:['帆布相机包','MAR AZUL / LOST PROPERTY'],consoleDesk:['流动电台','PALM WAVE / REMOTE UNIT']})[who],line,choices);
+  this.talk={who,line,choices};this.api.dialogue(names[who]??midnightSpeakers[who]??streetVoices[who]??({deckPress:['后台唱盘','FLAMINGO / DECK B'],frequencyCard:['调频磁卡','BAY WAVE / ENGINEERING'],canvasBag:['帆布相机包','MAR AZUL / LOST PROPERTY'],consoleDesk:['流动电台','BAY WAVE / REMOTE UNIT']})[who],line,choices);
   if(!same){const cam=this.sim.camera;this.cameraBlend=0;this.cameraStart=performance.now();this.origin=cam.position.clone();this.rotation=cam.quaternion.clone();this.initialFov=cam.fov}
   this.camera();
  }
@@ -157,8 +157,8 @@ export class LedgerChapter{
      ['接下这桩事',()=>this.move('sleeve','老维克指了指柜台上的蓝绿色封套。')],leave])],leave]);break;
   case 'sleeve':
    this.say('sleeve','A 面　《退潮以后》　玛拉现场录音。标签上的“火烈鸟首演”被一支红笔划去了。',[
-    ['翻到有签名的 B 面',()=>{s.clue=true;this.api.persist();this.say('sleeve','B 面　“首演在海浪唱片，给替我们拉来电池的维克。”下方有玛拉和卡洛斯两个人的签名。',[
-     ['收好封套，去俱乐部',()=>this.move('ride','玛拉跟上了你。你们可以步行，也可以坐街边的车。')]])}],['只记下地址，出发',()=>this.move('ride','火烈鸟俱乐部在霓虹中心。玛拉跟上了你。')]]);break;
+    ['翻到有签名的 B 面',()=>{s.clue=true;this.api.persist();this.say('sleeve','B 面　“首演在波音唱片，给替我们拉来电池的维克。”下方有玛拉和卡洛斯两个人的签名。',[
+     ['收好封套，去俱乐部',()=>this.move('ride','玛拉跟上了你。你们可以步行，也可以坐街边的车。')]])}],['只记下地址，出发',()=>this.move('ride','火烈鸟俱乐部在新桥商区。玛拉跟上了你。')]]);break;
   case 'ride':
    this.say('door','卡洛斯在舞池边，玛拉的台子在左后方。台上那支立麦也开着。今晚谁说的话，全场都听得见。',Object.entries(routes).map(([key,label])=>[label,()=>{s.lead=key;this.sim.setNight(true);this.move('party','选定了方向。走进后院后仍可改主意。')} ]));break;
   case 'board':
@@ -179,7 +179,7 @@ export class LedgerChapter{
     ['拿上母带，带玛拉离开',()=>{this.move('escape');this.armAlert();this.api.toast(this.broadcast(),6)}]]);break;
   case 'escape':
    this.say('door','先停一下。对讲机说有一箱母带被带离现场。给我看盒子上的编号，我可以当面和唱片店核对。',[
-    ['让老维克接电话',()=>{this.sim.clearAlert();this.move('return','妮娜放下对讲机。老维克在日落码头等你们。')}],leave]);break;
+    ['让老维克接电话',()=>{this.sim.clearAlert();this.move('return','妮娜放下对讲机。老维克在潮见码头等你们。')}],leave]);break;
   case 'return':
    this.say('vic','带子还在。等一下……这七百块是上周乐手的尾款。账本上有数，信封上没有名字。里科，你来分。',[
     ['把私账归还乐手　＋$400',()=>this.finish('return')],['和玛拉留下现金　＋$1,100',()=>this.finish('keep')],['再想想',()=>this.close()]]);break;
@@ -203,9 +203,9 @@ export class LedgerChapter{
  resolve(route){this.s.route=route;this.move('case',({deal:'卡洛斯和你握手。宾客让开了通向长桌的路。',mix:'三段鼓点合在一起，宾客涌向舞台。玛拉认出了原带。',stand:'现场安静下来，宾客举起手机记录交接。'})[route])}
  armAlert(){const n=this.s.route==='stand'?2:1;this.sim.beginAlert(n,this.s.route==='stand'?74:83,-111);this.custody=this.sim.custody}
  broadcast(){
-  if(this.town.s.outcome)return this.town.s.outcome==='live'?'FM 98.4　玛拉《退潮以后》 · 日落码头现场':'FM 98.4　雷蒙呈献 · 海岸午夜购物台';
-  const text=this.s.stage==='done'?(this.s.ending==='return'?'海浪唱片今夜把酬劳逐一送还乐手。':'火烈鸟称一笔演出款项下落不明。'):({deal:'火烈鸟宣布重新标注首演场地。',mix:'听众刚刚认出了玛拉失传的三个鼓点。',stand:'听众发来一段后院公开交接的现场录音。'})[this.s.route];
-  return (this.save.radio?'FM 98.6　':'街区传闻　')+(text??'海浪唱片今天营业。');
+  if(this.town.s.outcome)return this.town.s.outcome==='live'?'FM 98.4　玛拉《退潮以后》 · 潮见码头现场':'FM 98.4　雷蒙呈献 · 海岸午夜购物台';
+  const text=this.s.stage==='done'?(this.s.ending==='return'?'波音唱片今夜把酬劳逐一送还乐手。':'火烈鸟称一笔演出款项下落不明。'):({deal:'火烈鸟宣布重新标注首演场地。',mix:'听众刚刚认出了玛拉失传的三个鼓点。',stand:'听众发来一段后院公开交接的现场录音。'})[this.s.route];
+  return (this.save.radio?'FM 98.6　':'街区传闻　')+(text??'波音唱片今天营业。');
  }
  finish(ending){
   if(this.s.stage!=='return')return;

@@ -71,7 +71,7 @@ export class StreetRadio{
  hud(){
   const active=this.mode!=='off';$('airToggle').hidden=!active&&!this.canUse;$('airToggle').lastElementChild.textContent=active?'收天线':'街头开播';
   $('airBox').hidden=!active;if(!active)return;
-  $('airLabel').textContent=this.mode==='live'?'● LIVE　/　'+this.zone:'PALM WAVE　/　流动转播';
+  $('airLabel').textContent=this.mode==='live'?'● LIVE　/　'+this.zone:'BAY WAVE　/　流动转播';
   if(this.mode==='setup')$('airStatus').textContent=this.mistuned?'还有杂音。把指针对准 98.4 MHz。':'选一张唱片，把接收机调到 98.4 MHz。';
   if(this.mode==='locking')$('airStatus').textContent='天线正在锁频　'+Math.max(0,Math.ceil(5-this.age))+' s';
   if(this.mode==='live')$('airStatus').textContent='打赏 $'+this.earned+'　·　'+(this.age<20?'听众点歌中':this.age<34?'街坊正赶来围观':'本轮时段即将结束');
@@ -87,7 +87,7 @@ export class StreetRadio{
   if(this.mode==='live'){
    this.audience(dt,false);
    if(this.age>=this.nextTip){
-    const tip=(this.zone==='海景大道'?17:this.zone==='霓虹中心'?21:14)+(this.nextTip>=24?8:0)+(this.track==='sideb'?5:0);
+    const tip=(this.zone==='湾岸通'?17:this.zone==='新桥商区'?21:14)+(this.nextTip>=24?8:0)+(this.track==='sideb'?5:0);
     this.nextTip+=8;this.earned+=tip;this.save.money+=tip;this.save.midnight.tips+=tip;
     if(this.nextTip===16)this.save.midnight.shows++;this.api.persist();this.api.chime();this.api.toast('听众打赏　＋$'+tip,2.3);
    }

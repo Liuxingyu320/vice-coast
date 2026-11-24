@@ -8,7 +8,9 @@ import ramon from '../assets/ramon.glb';
 import streetFleet from '../assets/street-fleet.glb';
 import streetResidents from '../assets/street-residents.glb';
 
-const files={marlin,solano,van,rico,mara,ramon};
+import tokyoBay from '../assets/tokyo-bay.glb';
+
+const files={tokyoBay,marlin,solano,van,rico,mara,ramon};
 let models,loading;
 export function loadStudio(){
  if(!loading){

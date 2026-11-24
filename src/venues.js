@@ -46,7 +46,7 @@ function sessionMural(){
   c.strokeStyle='#f3ba9c';c.lineWidth=13;c.lineCap='round';c.beginPath();c.moveTo(727,328);c.bezierCurveTo(845,346,767,211,833,212);c.bezierCurveTo(863,213,866,241,854,250);c.stroke();
   c.fillStyle='#f4b49a';c.beginPath();c.ellipse(711,306,76,32,-.17,0,Math.PI*2);c.fill();c.lineWidth=6;
   for(const x of [706,727]){c.beginPath();c.moveTo(x,331);c.lineTo(x-3,390);c.lineTo(x-17,417);c.stroke()}
-  c.fillStyle='#f1d1a2';c.font='italic bold 100px Georgia';c.fillText('After Dark',48,243,545);c.font='700 25px sans-serif';c.fillText('FLAMINGO   •   LIVE SESSIONS',56,304);c.font='17px monospace';c.fillText('PALM CITY   /   EST. 1982',58,347)
+  c.fillStyle='#f1d1a2';c.font='italic bold 100px Georgia';c.fillText('After Dark',48,243,545);c.font='700 25px sans-serif';c.fillText('FLAMINGO   •   LIVE SESSIONS',56,304);c.font='17px monospace';c.fillText('TOKYO BAY   /   EST. 1982',58,347)
  });
 }
 export function createVenues(scene,colliders,footprints){
@@ -74,8 +74,8 @@ export function createVenues(scene,colliders,footprints){
   b(x,4.35,z,w+.55,.34,d+.55,0xcba89c);b(x,6.0,z,w,3.1,d,0xe7b996);
   b(x,7.65,z,w+.66,.22,d+.72,cream);b(x,7.95,z,w-.4,.33,d-.4,0xbe998a);
   for(let i=0;i<6;i++){const zz=46+i*3.16;b(143.09,5.99,zz,.14,1.65,1.66,0x627b84);b(143.17,5.43,zz,.18,.13,1.84,cream);b(143.2,6.03,zz,.16,1.62,.075,0xdeba96)}
-  for(const y of [3.53,3.84,4.14])b(143.64,y,z,1.75,.15,20.75,mint,0,0,0,true);
-  b(143.45,4.75,z,.62,1.28,16.5,ink);print(143.775,4.76,z,7.78,1.16,east,letterPanel('Wave Records','PALM CITY   •   VINYL & TAPES   •   EST. 1978','#234e50','#ffdbaf'));
+  b(143.55,3.59,z,1.60,.16,20.75,0x476664);
+  b(143.45,4.75,z,.62,1.28,16.5,ink);print(143.775,4.76,z,7.78,1.16,east,letterPanel('波音レコード','TOKYO BAY   •   VINYL & TAPES   •   EST. 1978','#234e50','#ffdbaf'));
   for(let j=0;j<20;j++)b(143.81,3.37,44.47+j,2.35,.12,1,j%2?0xf2d5b0:0xba655b,0,0,-.095);
   for(const zz of [52.04,56.05]){b(143.78,1.78,zz,.24,3.2,.18,0x735446);b(143.89,1.73,zz,.16,2.95,.055,brass)}
   const door=new T.MeshStandardMaterial({color:0x91b6b7,transparent:true,opacity:.31,side:T.DoubleSide});
@@ -115,7 +115,7 @@ export function createVenues(scene,colliders,footprints){
   wall(left,4.4,-120,18,8.5,48,0xd3998f);footprints.push({x:left,z:-120,w:18,d:48});
   b(left,8.86,-120,19,.46,49,cream);for(const zz of [-138,-131,-124,-117,-110,-103]){b(31.16,5.1,zz,.36,4.5,3.7,0x55657a);for(const y of [3.8,5.6])b(31.45,y,zz,.38,.14,4.2,cream)}
   for(const y of [7.45,7.77,8.10])lights.b(31.36,y,-120,.39,.13,48,0xff9c9d,0,0,0,true);
-  lights.add(plane,31.42,6.85,-120,14,2.8,1,0xffffff,0,east,0,letterPanel('Flamingo','SOCIAL CLUB   /   LEONIDA SESSIONS','#5c394e','#ffd2bc'));
+  lights.add(plane,31.42,6.85,-120,14,2.8,1,0xffffff,0,east,0,letterPanel('フラミンゴ','SOCIAL CLUB   /   SHIMBASHI SESSIONS','#5c394e','#ffd2bc'));
   for(const [xx,zz,ww,dd] of [[50,back,36,.55],[42.25,-97,20.5,.55],[62.75,-97,10.5,.55],[67.7,-130,.5,26],[67.7,-103,.5,11]]){
    wall(xx,.86,zz,ww,1.25,dd,0xc29488);b(xx,1.56,zz,ww+.12,.16,dd+.12,cream);
   }

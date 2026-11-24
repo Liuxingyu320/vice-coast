@@ -11,7 +11,7 @@ const unitBox=new T.BoxGeometry(1,1,1);
 function mesh(g,m,group,x=0,y=0,z=0){const o=new T.Mesh(g,m);o.position.set(x,y,z);group.add(o);return o}
 const shadowTex=canvasTexture(64,64,(c)=>{let g=c.createRadialGradient(32,32,5,32,32,32);g.addColorStop(0,'rgba(25,10,38,.72)');g.addColorStop(.65,'rgba(25,10,38,.38)');g.addColorStop(1,'rgba(25,10,38,0)');c.fillStyle=g;c.fillRect(0,0,64,64)});
 export function shadow(parent,w,d){const mat=new T.MeshBasicMaterial({map:shadowTex,transparent:true,depthWrite:false});const o=mesh(new T.PlaneGeometry(w,d),mat,parent,0,.036,0);o.rotation.x=-Math.PI/2;return o}
-const plateTex=canvasTexture(128,48,(c)=>{c.fillStyle='#ffe6ba';c.fillRect(0,0,128,48);c.fillStyle='#b94b60';c.font='italic bold 10px sans-serif';c.textAlign='center';c.fillText('Palm Coast',64,12);c.fillStyle='#263248';c.font='bold 27px monospace';c.fillText('COAST',64,39)});
+const plateTex=canvasTexture(128,48,(c)=>{c.fillStyle='#ffe6ba';c.fillRect(0,0,128,48);c.fillStyle='#b94b60';c.font='italic bold 10px sans-serif';c.textAlign='center';c.fillText('品川',64,12);c.fillStyle='#263248';c.font='bold 27px monospace';c.fillText('COAST',64,39)});
 const plate=new T.MeshBasicMaterial({map:plateTex});
 export function makeCar(color,type=0,detail=true){
  const car=new T.Group(),shell=new T.Group();car.add(shell);shadow(car,3.4,6.3);
@@ -24,11 +24,11 @@ export function makeCar(color,type=0,detail=true){
    if(!paint)paint=part.material.clone();
    part.material=paint;
   });
-  const mark=canvasTexture(512,128,(c,w,h)=>{c.textAlign='center';c.fillStyle='#ffe1a2';c.font='italic bold 78px Georgia';c.fillText('Palm Wave',w/2,75);c.font='bold 23px monospace';c.fillText('REMOTE UNIT   /   98.4 FM',w/2,110)});
+  const mark=canvasTexture(512,128,(c,w,h)=>{c.textAlign='center';c.fillStyle='#ffe1a2';c.font='italic bold 78px Georgia';c.fillText('Bay Wave',w/2,75);c.font='bold 23px monospace';c.fillText('REMOTE UNIT   /   98.4 FM',w/2,110)});
   const logo=new T.MeshBasicMaterial({map:mark,transparent:true,depthWrite:false});
   for(const side of [-1,1]){const panel=new T.Mesh(new T.PlaneGeometry(1.61,.42),logo);panel.position.set(side*1.072,1.04,.52);panel.rotation.y=side*Math.PI/2;shell.add(panel)}
   const rear=text=>canvasTexture(384,64,c=>{c.fillStyle='#142d39';c.fillRect(0,0,384,64);c.textAlign='center';c.fillStyle='#f2d196';c.font='bold 42px monospace';c.fillText(text,192,47,360)});
-  for(const [txt,y,w,h,z] of [['P W  •  984',.85,.47,.138,2.397],['PALM WAVE',1.05,.65,.12,2.36]]){const tag=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:rear(txt)}));tag.position.set(txt.startsWith('PALM')?.47:0,y,z);shell.add(tag)}
+  for(const [txt,y,w,h,z] of [['B W  •  984',.85,.47,.138,2.397],['BAY WAVE',1.05,.65,.12,2.36]]){const tag=new T.Mesh(new T.PlaneGeometry(w,h),new T.MeshBasicMaterial({map:rear(txt)}));tag.position.set(txt.startsWith('BAY')?.47:0,y,z);shell.add(tag)}
  }else{
   model.traverse(part=>{
    if(!part.isMesh||!part.material.name.startsWith('Paintwork'))return;

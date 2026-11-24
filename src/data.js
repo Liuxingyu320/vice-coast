@@ -8,21 +8,21 @@ export const clearOfCrossStreets=(z,halfDepth=0)=>zs.every(cross=>Math.abs(z-cro
 export const spawn={x:164.3,z:134,a:0};
 export const missions=[
  {name:'午夜频率',en:'MIDNIGHT FREQUENCY',from:'莉亚 · 海岸电台',line:'演出只差一盘母带。去唱片店取货，再送到海边的现场。',reward:650,steps:[
-  {x:164.2,z:63,label:'到海浪唱片店取母带',note:'母带已装车。莉亚在摩天轮旁等你。'},
-  {x:164.2,z:-127,label:'把母带送到日落码头',note:'莉亚「母带上机。刚才跑热轮胎的那位，这首送给你。」'}]},
- {name:'霓虹计时赛',en:'NEON SPRINT',from:'索尔 · 夜跑车会',line:'从海景大道起跑，穿过霓虹区。发车后 80 秒内通过三个计时点。',reward:1100,time:80,steps:[
+  {x:164.2,z:63,label:'到波音唱片店取母带',note:'母带已装车。莉亚在摩天轮旁等你。'},
+  {x:164.2,z:-127,label:'把母带送到潮见码头',note:'莉亚「母带上机。刚才跑热轮胎的那位，这首送给你。」'}]},
+ {name:'霓虹计时赛',en:'NEON SPRINT',from:'索尔 · 夜跑车会',line:'从湾岸通起跑，穿过霓虹区。发车后 80 秒内通过三个计时点。',reward:1100,time:80,steps:[
   {x:164.2,z:15,label:'驶入夜跑起点',note:'开始计时。穿过下一个光圈！'},
   {x:83.8,z:-74,label:'通过霓虹区计时点',note:'第一个计时点通过。'},
-  {x:4,z:-150,label:'通过棕榈广场计时点',note:'最后一段，终点在酒店街。'},
+  {x:4,z:-150,label:'通过芝浦广场计时点',note:'最后一段，终点在酒店街。'},
   {x:151,z:-235.8,label:'冲过酒店街终点',note:'终点计时已锁定。'}]},
- {name:'滨海拾光',en:'THE LAST EXPOSURE',from:'诺亚 · 街头摄影师',line:'摄影师留下了两卷胶片。到小哈瓦那的露台步行取件，再送去滨海冲印店。',reward:900,steps:[
-  {x:-84,z:83,label:'开到小哈瓦那会合点',note:'胶片就在露台边。停车后按 F 下车。'},
+ {name:'滨海拾光',en:'THE LAST EXPOSURE',from:'诺亚 · 街头摄影师',line:'摄影师留下了两卷胶片。到深川下町的露台步行取件，再送去有明照相馆。',reward:900,steps:[
+  {x:-84,z:83,label:'开到深川下町会合点',note:'胶片就在露台边。停车后按 F 下车。'},
   {x:-91.8,z:95,label:'步行到露台边取胶片',foot:true,note:'拿到胶片。回车里送去冲印店。'},
-  {x:84,z:145,label:'把胶片送到滨海冲印店',note:'底片交接完成。海岸的黄昏留住了。'}]}
+  {x:84,z:145,label:'把胶片送到有明照相馆',note:'底片交接完成。海岸的黄昏留住了。'}]}
 ];
 export const tapes=[
  {x:174,z:95,name:'海风倒带'}, {x:178,z:-115,name:'码头余辉'}, {x:13,z:-48,name:'落日调频'},
- {x:-146,z:14,name:'棕榈回声'}, {x:-92,z:92,name:'街角慢拍'}, {x:66,z:204,name:'散场之后'}];
+ {x:-146,z:14,name:'银杏回声'}, {x:-92,z:92,name:'街角慢拍'}, {x:66,z:204,name:'散场之后'}];
 export const paints=[{id:'cherry',name:'落日樱桃',color:0xe84c68,price:0},{id:'lagoon',name:'潟湖薄荷',color:0x32d1c2,price:250},{id:'gold',name:'日光琥珀',color:0xf0a340,price:400},{id:'afterglow',name:'午夜极光',color:0x9871e5,unlock:450}];
 export const parkedSpots=[{x:153.2,z:56,a:Math.PI},{x:73.1,z:-112,a:Math.PI},{x:-86.6,z:100,a:Math.PI},{x:8.5,z:185,a:0}];
 export const parkedColors=[0xe84c68,0x6fbbac,0xf2c681,0x918eb9,0xd3d8c5];
@@ -31,8 +31,8 @@ export const streetStyles=[
  ...[0xb690c0,0x83bdb8,0xf1cd89].map((color,i)=>({color,model:i%2})),{color:0x368784,model:2},
  ...additions.map((v,i)=>({color:v.color,model:i+3}))
 ];
-export function district(x,z){if(x>137)return '海景大道';if(x< -56)return '小哈瓦那';return z<0?'霓虹中心':'棕榈广场'}
-export function districtEn(x,z){if(x>137)return 'OCEAN DRIVE';if(x< -56)return 'LITTLE HAVANA';return z<0?'NEON DISTRICT':'PALM SQUARE'}
+export function district(x,z){if(x>137)return '湾岸通';if(x< -56)return '深川下町';return z<0?'新桥商区':'芝浦广场'}
+export function districtEn(x,z){if(x>137)return 'WANGAN-DORI';if(x< -56)return 'FUKAGAWA';return z<0?'SHIMBASHI':'SHIBAURA'}
 export function rng(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}}
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -95,14 +95,14 @@ export function loadSave(snapshot=readEdition()){
 
 // Curbside stops use a drivable coordinate and a separate place for the passenger to stand.
 export const stops=[
- {name:'海景酒店',en:'PARADISO',x:165,z:111,walkX:171.3,walkZ:111},
- {name:'日落码头',en:'SUNSET PIER',x:165,z:-122,walkX:171.3,walkZ:-122},
- {name:'海浪唱片',en:'WAVE RECORDS',x:154,z:52,walkX:148.6,walkZ:52},
+ {name:'东京湾酒店',en:'TOKYO BAY HOTEL',x:165,z:111,walkX:171.3,walkZ:111},
+ {name:'潮见码头',en:'SHIOMI PIER',x:165,z:-122,walkX:171.3,walkZ:-122},
+ {name:'波音唱片',en:'WAVE RECORDS',x:154,z:52,walkX:148.6,walkZ:52},
  {name:'霓虹剧院',en:'NEON THEATRE',x:75,z:-101,walkX:68.3,walkZ:-101},
- {name:'棕榈广场',en:'PALM SQUARE',x:-5,z:44,walkX:-11.4,walkZ:44},
- {name:'哈瓦那夜市',en:'HAVANA MARKET',x:-75,z:106,walkX:-68.5,walkZ:106},
+ {name:'芝浦广场',en:'SHIBAURA',x:-5,z:44,walkX:-11.4,walkZ:44},
+ {name:'深川夜市',en:'FUKAGAWA MARKET',x:-75,z:106,walkX:-68.5,walkZ:106},
  {name:'北岸俱乐部',en:'NORTH SHORE',x:107,z:-235,walkX:107,walkZ:-228.5},
- {name:'滨海冲印店',en:'COASTAL FILM',x:85,z:141,walkX:91.4,walkZ:141}
+ {name:'有明照相馆',en:'ARIAKE PHOTO',x:85,z:141,walkX:91.4,walkZ:141}
 ];
 export const guests=[
  {name:'露娜',job:'驻场歌手',line:'乐队给我留了最后一首歌。'},
@@ -118,7 +118,7 @@ export const upgrades=[
  {id:'nitro',name:'氮气扩容',en:'NITRO',price:[450,800],stat:l=>((1+.35*l)/.30).toFixed(1)+' s',detail:'满槽连续喷射时间'}
 ];
 export const circuits=[
- {id:'palm',name:'棕榈短环',en:'PALM CIRCUIT',laps:1,pace:16.3,prize:880,points:[[160,32],[160,-80],[80,-80],[80,80],[160,80]],color:'#79f1dc'},
+ {id:'palm',name:'湾岸短环',en:'WANGAN CIRCUIT',laps:1,pace:16.3,prize:880,points:[[160,32],[160,-80],[80,-80],[80,80],[160,80]],color:'#79f1dc'},
  {id:'neon',name:'霓虹长夜',en:'NEON GRAND PRIX',laps:2,pace:20.6,prize:1700,points:[[80,114],[80,-80],[0,-80],[0,-160],[-80,-160],[-80,80],[0,80],[0,160],[80,160]],color:'#ff93b8'}
 ];
 export const recordStall={x:140.2,z:65.85};
@@ -151,6 +151,8 @@ export function farePay(f){
  const tip=Math.round(terms.maxTip*f.comfort/100*timePart);
  return {base:terms.base,tip,total:terms.base+tip};
 }
+// Old map pins carry display names. Resolve renamed locations before restoring the pin.
+const formerStopNames={'海景酒店':'东京湾酒店','日落码头':'潮见码头','海浪唱片':'波音唱片','棕榈广场':'芝浦广场','哈瓦那夜市':'深川夜市','滨海冲印店':'有明照相馆'};
 function restoreExpansion(base,d){
  const cash=n=>Number.isSafeInteger(n)&&n>=0?n:0;
  base.night=typeof d.night==='boolean'?d.night:true;
@@ -159,7 +161,7 @@ function restoreExpansion(base,d){
  for(const t of circuits){const s=d.records?.[t.id];if(s&&Number.isFinite(s.best)&&s.best>0&&Number.isInteger(s.rank)&&s.rank>=1&&s.rank<=4)base.records[t.id]={best:s.best,rank:s.rank,runs:Math.max(1,cash(s.runs))}}
  if(d.pin&&Number.isFinite(d.pin.x)&&Number.isFinite(d.pin.z)){
   const car=additions.find(v=>v.key===d.pin.vehicleKey),exact=Object.values(localStops).find(v=>v.name===d.pin.name);
-  base.pin=car?{x:clamp(d.pin.x,-255,224),z:clamp(d.pin.z,-255,255),name:car.name,vehicleKey:car.key}:exact?{...exact}:{...curbPin(d.pin.x,d.pin.z),name:stops.find(p=>p.name===d.pin.name)?.name??'自定义地点'};
+  base.pin=car?{x:clamp(d.pin.x,-255,224),z:clamp(d.pin.z,-255,255),name:car.name,vehicleKey:car.key}:exact?{...exact}:{...curbPin(d.pin.x,d.pin.z),name:stops.find(p=>p.name===(formerStopNames[d.pin.name]??d.pin.name))?.name??'自定义地点'};
  }
  const f=d.cab;if(!f||base.mission>=0||!Number.isInteger(f.from)||!stops[f.from]||!Number.isInteger(f.to)||!stops[f.to]||f.from===f.to||!Number.isInteger(f.guest)||!guests[f.guest])return;
  base.cab={from:f.from,to:f.to,guest:f.guest,kind:f.kind==='express'?'express':'cruise',bumps:cash(f.bumps),stage:f.stage==='ride'?'ride':'pickup',comfort:clamp(Number.isFinite(f.comfort)?f.comfort:100,0,100),seconds:Math.max(0,Number.isFinite(f.seconds)?f.seconds:0),car:clamp(Number.isInteger(f.car)?f.car:-1,-1,base.fleet?base.fleet.length-1:parkedSpots.length)};

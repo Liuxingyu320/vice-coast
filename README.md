@@ -1,10 +1,10 @@
-# 棕榈海岸 · VICE COAST
+# 东京湾街区 · TOKYO BAY
 
-原创 3D 海滨城市浏览器游戏。玩家可以在街区步行、开车、和街坊交谈，完成《海浪账本》与《午夜暗频》的分支剧情，也可以自由漫游。
+东京湾沿岸的虚构街区。打开 [Blender 场景](assets/东京湾街区.blend) 可编辑街区模型，按空格可预览高架电车。玩家可以在街区步行、开车、和街坊交谈，完成《海浪账本》与《午夜暗频》的分支剧情，也可以自由漫游。
 
 ## 本地试玩
 
-用 Git 克隆仓库，或从 GitHub 的 **Code → Download ZIP** 下载项目。安装 Node.js 后，在项目目录依次执行下面两条命令。
+从 Git 下载本分支后，在项目目录运行下面两条命令生成离线游戏。
 
 ```sh
 npm ci
@@ -23,6 +23,7 @@ npm run build
 | --- | --- |
 | [src/](src/) | 任务与对话、城市、车辆和人物行为、界面 |
 | [assets/](assets/) | 游戏用的 GLB 模型、封面和可在 Blender 打开的工程 |
+| [art/tokyo/build.py](art/tokyo/build.py) | 从 Blender 重建东京街区、游戏模型和碰撞数据 |
 | [art/build_street_studio.py](art/build_street_studio.py) | 生成街头车辆与人物的 Blender 脚本 |
 | [checks/](checks/) | 路口、人物路线和车辆停车点的场景检查 |
 

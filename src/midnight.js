@@ -4,11 +4,11 @@ import {personDetail,animatePerson} from './people.js';
 
 const point=(x,z,label)=>({x,z,label,type:'chapter'});
 const spots={
- new:point(145,54.2,'到海浪唱片找玛拉'),door:point(69.6,-113.8,'在火烈鸟正门找妮娜'),
+ new:point(145,54.2,'到波音唱片找玛拉'),door:point(69.6,-113.8,'在火烈鸟正门找妮娜'),
  bar:point(46,-104.6,'到后院吧台找鼓手蒂托'),needle:point(42.1,-128.5,'在调音台放老维克的唱片'),
  crew:point(localStops.crew.x,localStops.crew.z,'去后巷找搬运工帕兹'),haul:point(55,-100,'从装货门把音箱送到黄线旁'),
- card:point(41.8,-131.75,'到调音台拿调频磁卡'),dial:point(localStops.dial.x,localStops.dial.z,'在日落码头调试流动电台'),offer:point(187,-127.5,'和雷蒙谈午夜时段'),
- stall:point(localStops.stall.x,localStops.stall.z,'和旧唱片摊主露兹聊聊'),crate:point(141,54.7,'把唱片筐送进海浪唱片'),
+ card:point(41.8,-131.75,'到调音台拿调频磁卡'),dial:point(localStops.dial.x,localStops.dial.z,'在潮见码头调试流动电台'),offer:point(187,-127.5,'和雷蒙谈午夜时段'),
+ stall:point(localStops.stall.x,localStops.stall.z,'和旧唱片摊主露兹聊聊'),crate:point(141,54.7,'把唱片筐送进波音唱片'),
  photo:point(localStops.photo.x,localStops.photo.z,'和摄影师伊内丝聊聊'),bag:point(localStops.bag.x,localStops.bag.z,'在海蓝亭台阶边寻找相机包'),
  deliver:point(176.5,-102.6,'把相机包交还伊内丝'),sell:point(64.5,-91.8,'向帕兹转让相机包')
 };
@@ -64,12 +64,12 @@ export class MidnightDistrict{
    if(save.money>=200)choices.push(['付 $200 请搬运班代送',()=>{if(save.money<200||s.stage!=='crew')return;save.money-=200;s.pass=true;this.next('card','帕兹叫同事接手搬运。装货门已开，你可以直接去后台取磁卡。')}]);
    this.say('paz','前门的客人名单不归我管。你可以替我搬一趟，我给你签班牌。赶时间就付两百，我让夜班替你把箱子搬进去。黄线在卷闸里头。',[...choices,leave]);break}
   case 'haul':this.say('paz','音箱到位。把箱扣朝外，夜班的人才摸得着。磁卡在舞台左后方的调音台。',[['卸下音箱，去取磁卡',()=>this.next('card')],leave]);break;
-  case 'card':this.say('frequencyCard','薄薄的磁条背面写着铅笔字。“98.4，灯阵六成。两只旋钮稳住，等我数完二拍半。”',[['装好磁卡，到码头接台',()=>this.next('dial','码头边停着一辆 Palm Wave 转播车，谁都可以开。')],leave]);break;
+  case 'card':this.say('frequencyCard','薄薄的磁条背面写着铅笔字。“98.4，灯阵六成。两只旋钮稳住，等我数完二拍半。”',[['装好磁卡，到码头接台',()=>this.next('dial','码头边停着一辆 Bay Wave 转播车，谁都可以开。')],leave]);break;
   case 'dial':this.startTuner();break;
   case 'offer':this.say('ramon','我出一千二买今晚的时段。播完广告，明天这台车就能换上新漆。你也可以给玛拉开麦。磁卡在你手里。',[
    ['推起玛拉的现场原声　＋$500',()=>this.finish('live')],['把午夜时段签给雷蒙　＋$1,200',()=>this.finish('sponsor')],leave]);break;
   case 'stall':{
-   const choices=[['替露兹把唱片搬进店里寄售',()=>{s.vinyl='carrying';this.commit('旧唱片筐已拿好。海浪唱片在这条人行道北边。')}]];
+   const choices=[['替露兹把唱片搬进店里寄售',()=>{s.vinyl='carrying';this.commit('旧唱片筐已拿好。波音唱片在这条人行道北边。')}]];
    if(this.honest)choices.push(['用乐手联名担保摊位',()=>{s.vinyl='catalogued';this.commit('露兹把一张首版《Side B》套进了你的纸袋。')}]);
    this.say('luz','雨一来，这些头版就得泡在路上。维克愿意给我腾半格货架，可我得守摊。你能搭把手吗？',[...choices,leave]);break}
   case 'crate':this.say('vic','这张头版我当年找了半年。放心，露兹的名字我写第一行。跑腿的钱和她留给你的首版都在这。',[['把整筐唱片交给维克',()=>{s.vinyl='delivered';save.money+=180;this.commit('街头见闻 · 寄售完成　＋$180　／　稀有首版《Side B》')}],leave]);break;
