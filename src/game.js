@@ -1,7 +1,7 @@
 import {StreetRadio} from './street-radio.js';
 import {loadStudio} from './blender-assets.js';
 import {LedgerChapter} from './chapter.js';
-import {garagePrice,routes,readLedger} from './ledger-state.js';
+import {garagePrice} from './ledger-state.js';
 import {DriftChain} from './drift.js';
 import {StreetRace} from './racing.js';
 import {CabShift} from './cab.js';
@@ -16,20 +16,8 @@ import {editionKey,localStops,readEdition,loadSave,missions,tapes,paints,dist,di
 
 const $=id=>document.getElementById(id),icon=name=>'<svg aria-hidden="true"><use href="#i-'+name+'"/></svg>';
 let snapshot=readEdition();
-const replay=new URL(location.href).searchParams.get('replay')==='flamingo';
-const sample=new URL(location.href).searchParams.get('sample');
-const demo=!replay&&['return','keep'].includes(sample);
 const save=loadSave(snapshot),audio=new CoastAudio();
-if(demo){
- Object.assign(save,loadSave('{}'));save.chapter=readLedger({ending:sample,active:true,route:sample==='return'?'deal':'mix'});save.money=sample==='return'?400:1100;save.walker={x:147,z:54.5,a:1.52};
-}
-if(replay){
- save.midnight=loadSave('{}').midnight;save.chapter=readLedger({stage:'ride',clue:true,active:true});save.walker={x:71.5,z:-113.8,a:1.56};save.night=true;save.mission=-1;save.cab=null;
-}
-function replayLocation(on){
- if(!replay)persist();const url=new URL(location.href);if(on)url.searchParams.set('replay','flamingo');else url.searchParams.delete('replay');location.assign(url.href);
-}
-let sim=null,screen='menu',panel='',selectedJob=0,previousFocus=null,elapsed=0,timer=null,savedAt=0,uiAt=0,toastUntil=0,startedAt=0,rewardUntil=0,saveAvailable=true,opening=false,lastArea='',lastContext='';
+let sim=null,screen='menu',panel='',selectedJob=0,previousFocus=null,elapsed=0,timer=null,savedAt=0,uiAt=0,toastUntil=0,startedAt=0,rewardUntil=0,saveAvailable=true,opening=false,lastArea='',lastContext='',shownCash=null,cashUntil=0;
 let streetRadio=null,chapter=null,race=null,cab=null,course=0,kind='cruise',garageTab='performance',studioYaw=2.34,rewardMode='story';
 const drift=new DriftChain(),keyboardHolds=new Map(),touchHolds=new Map();
 let lookPointer=null,ignoreUnlock=false,swallowEscape=0;
@@ -80,7 +68,8 @@ function startFare(){
  sim.setNight(true);toast('夜班调度 · '+guests[save.cab.guest].name+' 等待接送');persist();updateHUD();
 }
 function startRace(){eventStart();clearFare();sim.setNight(true);sim.raceClosed=true;race.start(circuits[course],sim);audio.chime();toast('跟住薄荷绿旗门 · 对手车尾可补充氮气',4);persist();updateHUD()}
-function receipt(mode,title,amount,note,next){rewardMode=mode;rewardUntil=Infinity;audio.chime();$('toast').classList.remove('show');toastUntil=0;$('reward').firstElementChild.textContent=mode==='race'?'COAST MOTOR CLUB　/　比赛成绩':'COAST CABS　/　车费收据';$('rewardname').textContent=title;$('rewardcash').textContent='＋'+money(amount);$('rewardnote').textContent=note;$('rewardbalance').textContent='当前余额 '+money(save.money);$('nextjob').textContent=next;persist();updateHUD()}
+function receipt(mode,title,amount,note,next){rewardMode=mode;rewardUntil=Infinity;audio.chime();$('toast').classList.remove('show');toastUntil=0;$('reward').firstElementChild.textContent=mode==='race'?'COAST MOTOR CLUB　/　比赛成绩':mode==='chapter'?'CHAPTER 01　/　工资':'COAST CABS　/　车费收据';$('rewardname').textContent=title;$('rewardcash').textContent=mode==='chapter'?money(amount):'＋'+money(amount);$('rewardnote').textContent=note;$('rewardbalance').textContent='当前余额 '+money(save.money);$('nextjob').textContent=next;persist();updateHUD()}
+function finishChapter(){receipt('chapter','已入伙',save.money,'他还是没有房子。钱还在身上。保险箱留在纸条上的地址。','回到街头')}
 function podium(result){
  stopRace();
  const prev=save.records[result.id],best=Math.min(prev?.best??Infinity,result.time);
@@ -102,7 +91,6 @@ function dropoff(result){
 const money=n=>'$'+n.toLocaleString('en-US');
 const touch=()=>matchMedia('(pointer:coarse)').matches;
 function persist(){
- if(replay||demo)return;
  if(sim){const c=sim.car;save.car=sim.carId;save.pos={x:c.position.x,z:c.position.z,a:c.rotation.y};
   save.walker=sim.inCar?null:{...sim.pos};save.fleet=sim.cars.map(v=>({x:v.position.x,z:v.position.z,a:v.rotation.y,trafficId:v.userData.trafficId,model:v.userData.trafficId==null?undefined:v.userData.model}))}
  try{
@@ -117,23 +105,20 @@ function onOtherSave(current){
  if(!sim&&screen==='menu'){Object.assign(save,loadSave(current));snapshot=current;refreshMenu();return}
  if(panel!=='sync')showPanel('sync');
 }
-window.addEventListener('storage',e=>{if(!replay&&!demo&&e.key===editionKey)onOtherSave(readEdition())});
+window.addEventListener('storage',e=>{if(e.key===editionKey)onOtherSave(readEdition())});
 function toast(text,seconds=3.3){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=elapsed+seconds}
 function refreshMenu(){
- $('donecount').textContent=save.done.length+' / 3';$('tapecount').textContent=save.tapes.length+' / 6';
- $('story').querySelector('span').textContent=save.chapter.stage==='new'?'进入海浪账本':save.chapter.stage==='done'?'回到街区':'继续海浪账本';
- $('tagline').textContent=save.chapter.stage==='done'?'唱片已经翻面，街区还记得你的选择。':'一盘失踪的母带，一本没结清的账。';
- const next=!!save.chapter.ending;$('firstArt').hidden=next;$('secondArt').hidden=!next;
- $('edition').innerHTML=next?'<i></i>CHAPTER 02 <em>/</em> 午夜暗频':'<i></i>CHAPTER 01 <em>/</em> 海浪账本';
- if(next){$('story').querySelector('span').textContent=save.midnight.outcome?'回到午夜街区':save.midnight.stage==='new'?'进入午夜暗频':'继续午夜暗频';$('tagline').textContent=demo?'独立试玩 · '+(sample==='return'?'乐手记得你归还的尾款。':'门房还记得你留下的现金。'):save.midnight.outcome?'午夜过后，街上的电台还在播放你的选择。':'午夜的一个空频段，两个人都想让全城听见。'}
- if(replay){$('story').querySelector('span').textContent='开始后院回放';$('tagline').textContent='重演火烈鸟之夜。回放使用独立进度。'}
+ $('donecount').textContent=save.done.length+' / '+missions.length;$('tapecount').textContent=save.tapes.length+' / 6';
+ $('story').querySelector('span').textContent=save.chapter.stage==='new'?'进入工资':save.chapter.stage==='done'?'回到街区':'继续工资';
+ $('tagline').textContent=save.chapter.stage==='done'?'他正式跟着牛子干。钱还在身上。':'没有房子，钱在身上。活断了，就去把活续上。';
+ $('edition').innerHTML='<i></i>CHAPTER 01 <em>/</em> 工资';
  document.querySelectorAll('.sound').forEach(b=>{b.innerHTML=icon(save.sound?'audio':'off');b.setAttribute('aria-label',save.sound?'关闭声音':'打开声音');b.setAttribute('aria-pressed',String(save.sound))});
 }
 let photoYaw=-.75,photoHeight=2.6,photoRadius=6.3,dragPoint=null;
 let relay=0,sprintLock=false,lastCheck=null;const lastSample={x:0,z:0};
 function beginJob(id){
  const resume=save.bookmark?.id===id?save.bookmark.step:0;chapter?.suspend();relay=0;drift.reset();stopRace();clearFare();rewardMode='story';
- save.mission=id;save.bookmark=null;save.step=resume;timer=null;sprintLock=false;lastCheck=null;rewardUntil=0;audio.chime();toast(missions[id].from+'　“'+(id===0?'唱片店等你。粉色光圈就是取货点。':id===1?'先到湾岸通集合，再开始计时。':'胶片在深川下町，我在露台等你。')+'”',5);
+ save.mission=id;save.bookmark=null;save.step=resume;timer=null;sprintLock=false;lastCheck=null;rewardUntil=0;audio.chime();toast(missions[id].from+'　“先到湾岸通集合，再开始计时。”',5);
  persist();updateHUD();
 }
 function trackChapter(){
@@ -154,18 +139,18 @@ async function enter(story){
  if(opening)return;opening=true;audio.init();$('loading').hidden=false;
  await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
  $('worldview').hidden=false;
- try{if(!sim){await loadStudio();sim=new Simulation($('scene'),save,toast);cab=new CabShift(sim);race=new StreetRace(sim.scene,(color,i)=>flattenTraffic(makeCar(color,i,false)));chapter=new LedgerChapter(sim,save,{persist,toast,refresh:updateHUD,dialogue:dialogUI,hide:hideTalk,meter:mixUI,chime:()=>audio.chime(),cue:()=>audio.cue(),venue:zone=>audio.venue(zone,save.sound),start:trackChapter,free:()=>!race.active&&!save.cab&&save.mission<0});
+ try{if(!sim){await loadStudio();sim=new Simulation($('scene'),save,toast);cab=new CabShift(sim);race=new StreetRace(sim.scene,(color,i)=>flattenTraffic(makeCar(color,i,false)));chapter=new LedgerChapter(sim,save,{persist,toast,refresh:updateHUD,dialogue:dialogUI,hide:hideTalk,chime:()=>audio.chime(),bark:()=>{if(save.sound)audio.bark()},complete:finishChapter,start:trackChapter,free:()=>!race.active&&!save.cab&&save.mission<0});
   streetRadio=new StreetRadio(sim,save,{persist,toast,chime:()=>audio.chime(),free:()=>!race.active&&!save.cab&&save.mission<0});
   sim.restoreFootClearance();
  }sim.resize()}
  catch(e){console.warn('3D initialization:',e.message);$('worldview').hidden=true;$('loading').hidden=true;opening=false;showPanel('error');return}
  $('menu').classList.remove('daypreview');$('menu').hidden=true;$('loading').hidden=true;screen='play';opening=false;startedAt=elapsed;resetControls();lastContext='';$('context').textContent='';lastArea='';sim.resetCamera();
- if(story){trackChapter();toast(save.chapter.ending?chapter.town.journal:save.chapter.stage==='intro'?'湾岸通 · 黄昏　　前面戴耳机的人在等你。':chapter.journal,4.5)}
- else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();if(save.chapter.stage==='new'&&!save.walker&&!save.fleet)sim.placeOnFoot(148.45,54.85,.63);toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
+ if(story){trackChapter();toast(chapter.journal,4.5)}
+ else{stopRace();if(save.cab){save.heldCab={...save.cab};clearFare()}bookmark();chapter.suspend();toast('自由漫游 · 在城市手记里查看联系人和故事');persist()}
  chapter.update(0);
  updateHUD();sim.update(0,idleKeys,target());sim.render();$('worldview').classList.remove('arrival');requestAnimationFrame(()=>$('worldview').classList.add('arrival'));
 }
-function backMenu(){streetRadio?.stop(false);if(demo){const u=new URL(location.href);u.searchParams.delete('sample');location.assign(u.href);return}if(replay){replayLocation(false);return}chapter?.close();drift.reset();closePanel();stopRace();rewardUntil=0;screen='menu';persist();$('worldview').hidden=true;$('menu').hidden=false;refreshMenu();audio.update(false,save,0,false,false);$('story').focus()}
+function backMenu(){streetRadio?.stop(false);chapter?.close();drift.reset();closePanel();stopRace();rewardUntil=0;screen='menu';persist();$('worldview').hidden=true;$('menu').hidden=false;refreshMenu();audio.update(false,save,0,false,false);$('story').focus()}
 function atGate(job,step){
  const reach=step.foot?2.5:job.time?5.2:7.5;
  if(dist(sim.pos,step)<=reach)return true;
@@ -218,14 +203,19 @@ function updateHUD(){
  if(!sim)return;streetRadio?.hud();const p=sim.pos,job=missions[save.mission],step=target(),driving=sim.inCar;
  let top=job?'ON AIR　/　'+job.name:'TOKYO BAY　/　自由漫游';
  let text=step?.label??'查看城市委托';
- let distText=step?'◆ '+Math.round(dist(p,step))+' m　·　'+(save.step+1)+' / '+(job?.steps.length??1):'任务 '+save.done.length+'/3　·　录音带 '+save.tapes.length+'/6';
+ let distText=step?'◆ '+Math.round(dist(p,step))+' m　·　'+(save.step+1)+' / '+(job?.steps.length??1):'计时赛 '+save.done.length+'/'+missions.length+'　·　录音带 '+save.tapes.length+'/6';
  if(race?.active){const rel=Math.atan2(p.x-step.x,p.z-step.z)-p.a;const behind=Math.cos(rel)<-.55&&dist(p,step)>12;
   top='COAST MOTOR CLUB　/　'+race.spec.name;text='P'+race.rank+' / 4　·　第 '+race.lap+' / '+race.spec.laps+' 圈';distText=(behind?'↶ 旗门在后方':race.draft?'尾流充能 ↑':'旗门 '+(race.passed%race.track.gates.length+1)+' / '+race.track.gates.length)+'　·　'+clock(race.time)}
  else if(save.cab){const f=save.cab;top='COAST CABS　/　'+guests[f.guest].name;distText=Math.round(dist(p,step))+' m　·　'+(f.stage==='pickup'?'停车接客':'舒适 '+Math.round(f.comfort)+'%　小费 '+money(farePay(f).tip)+(f.kind==='express'?'　'+Math.max(0,Math.ceil(fareTerms(f).limit-f.seconds))+'s':''))}
  else if(step?.type==='pin'){top='TOKYO BAY　/　导航';distText=Math.round(dist(p,step))+' m　·　自设路标'}
- if(save.chapter.active&&step?.type!=='pin'){top=replay?'REPLAY　/　后院回放':save.chapter.ending?'CHAPTER 02　/　午夜暗频':'CHAPTER 01　/　海浪账本';text=step?.label??(save.chapter.ending?'午夜暗频 · 已完结':'海浪账本 · 已完结');distText=step?(sim.inCar?'驾车':'步行')+'　·　'+Math.round(dist(p,step))+' m':save.chapter.ending?chapter.town.journal:chapter.journal}
- if(sim.heat){const hidden=sim.spotted&&sim.unseen&&!sim.storyAlert&&!sim.raceClosed;const mark=hidden&&Math.sin(sim.time*7)>0?'☆':'★';const stars=mark.repeat(sim.heat)+(sim.raceClosed&&!sim.storyAlert?'　警戒暂缓':'　警戒中');if(race?.active)distText+='　·　'+stars;else top=stars}
- if(chapter.carryingMaster)distText+='　·　'+(driving?'母带箱已装车':'随身携带母带箱');
+ if(save.chapter.active&&step?.type!=='pin'){top='CHAPTER 01　/　工资';text=step?.label??(save.chapter.stage==='done'?'工资 · 已入伙':'工资');distText=step?(sim.inCar?'驾车':'步行')+'　·　'+Math.round(dist(p,step))+' m':chapter.journal}
+ const wanted=$('wanted'),heat=sim.heat||0;wanted.hidden=heat<=0;if(heat>0){const hold=sim.raceClosed&&!sim.storyAlert;$('wantedhold').hidden=!hold;wanted.querySelectorAll('svg').forEach((star,i)=>star.classList.toggle('on',i<heat));const label=(hold?'警戒暂缓，':'')+'通缉 '+heat+' 星';if(wanted.getAttribute('aria-label')!==label)wanted.setAttribute('aria-label',label)}
+ const fighting=!driving&&(!!sim.punch||sim.time<sim.comboUntil);
+ const vitals=$('vitals'),showVitals=!driving&&((sim.health??100)<100||fighting||heat>0);vitals.hidden=!showVitals;
+ if(showVitals){const pct=Math.max(0,Math.min(100,Math.round(sim.health??100))),width=pct+'%';if($('vitalfill').style.width!==width)$('vitalfill').style.width=width;vitals.classList.toggle('low',pct<=25);const vlabel='血量 '+pct;if(vitals.getAttribute('aria-label')!==vlabel)vitals.setAttribute('aria-label',vlabel)}
+ $('weapon').hidden=driving||!(fighting||heat>0);
+ $('cash').hidden=false;write($('cash'),money(save.money));
+ if(chapter.carrying)distText+='　·　'+(driving?'保险箱在车上':'保险箱在身上');
  write($('objtop'),top);write($('objtext'),text);write($('objdist'),distText);
  const count=$('countin');count.hidden=!race?.active||(race.countdown<=0&&race.time>.8);if(!count.hidden)write(count,race.countdown>0?Math.ceil(race.countdown):'GO');
  const chip=$('driftScore');chip.hidden=drift.score<8;if(!chip.hidden){write(chip.querySelector('b'),Math.floor(drift.score)+' PT');write(chip.querySelector('small'),'漂移 ×'+drift.multiplier.toFixed(1)+(drift.idle>.2?'　即将入账':''));const fill=(100-100*drift.idle/2.25)+'%';if(driftFill!==fill){driftFill=fill;chip.style.setProperty('--driftfill',fill)}}
@@ -233,7 +223,7 @@ function updateHUD(){
  if(hud.dataset.draft!==draft)hud.dataset.draft=draft;if(hud.dataset.activity!==activity)hud.dataset.activity=activity;
  const action=chapter?.nearby();shownSceneAction=action;$('sceneAction').hidden=!action;write($('sceneAction').lastElementChild,action?chapter.prompt(action):'');
  const pressed=String(save.radio);if($('radio').getAttribute('aria-pressed')!==pressed)$('radio').setAttribute('aria-pressed',pressed);
- write($('radiotxt'),sim.airTrack?'LIVE 98.4':save.radio?(save.midnight.outcome?'FM 98.4':'FM 98.6'):'RADIO OFF');
+ write($('radiotxt'),sim.airTrack?'LIVE 98.4':save.radio?'FM 98.6':'RADIO OFF');
  write($('speed'),String(Math.round(Math.abs(sim.speed)*3.6)).padStart(3,'0'));
  write($('gear'),sim.speed<-.4?'R':sim.speed<.4?'N':String(Math.min(6,1+Math.floor(sim.speed/7))));
  const boostWidth=(sim.boost*100)+'%';if(boostShown!==boostWidth){boostShown=boostWidth;$('boostbar').style.width=boostWidth}
@@ -245,20 +235,21 @@ function updateHUD(){
  const useCar=$('touchF');
  useCar.hidden=driving?!sim.canExitAtSpeed()||race.active||save.cab?.stage==='ride':!nearby;
  shownCarAction=useCar.hidden?null:driving?sim.car:nearby;
- let carActionLabel=chapter.carryingMaster?(driving?'带箱下车':'装箱上车'):(driving?'下车':'上车');
- if(save.midnight.stage==='haul')carActionLabel=driving?'带音箱下车':'装音箱上车';
+ let carActionLabel=driving?'下车':'上车';
  write(useCar.lastElementChild,nearby?carActionLabel+' · '+sim.carName(nearby):carActionLabel);
- write(useCar.querySelector('kbd'),!driving&&!action&&nearby?'E / F':'F');
+ write(useCar.querySelector('kbd'),'F');
  if(touch()){const jump=$('touchJump'),fist=$('touchPunch');write(document.querySelector('[data-hold="ShiftLeft"]'),driving?'氮气':'奔跑');jump.hidden=false;write(jump,driving?'手刹':'跳跃');const jumpLabel=driving?'手刹':'跳跃';if(jump.getAttribute('aria-label')!==jumpLabel)jump.setAttribute('aria-label',jumpLabel);fist.hidden=driving;write(document.querySelector('[data-hold="KeyW"]'),driving?'油门':'前进');write(document.querySelector('[data-hold="KeyS"]'),driving?'刹车':'后退');const left=document.querySelector('[data-hold="KeyA"]'),right=document.querySelector('[data-hold="KeyD"]');write(left,driving?'◀':'左');write(right,driving?'▶':'右');const leftLabel=driving?'左转':'左移',rightLabel=driving?'右转':'右移';if(left.getAttribute('aria-label')!==leftLabel)left.setAttribute('aria-label',leftLabel);if(right.getAttribute('aria-label')!==rightLabel)right.setAttribute('aria-label',rightLabel)}
  const combo=$('combo'),chain=!driving&&sim.combo>0&&sim.time<sim.comboUntil;combo.hidden=!chain;if(chain)write(combo.querySelector('b'),String(sim.combo));
  if(save.cab&&dist(p,step)<35)context=cab.hold>0?(save.cab.stage==='pickup'?'乘客正在上车…':'乘客正在下车…'):'在琥珀色圈内刹停';else if(race?.draft)context='尾流充能 ↑　按住加速冲刺';else if(job&&step&&!step.foot&&driving&&!job.time&&dist(p,step)<42)context=relay>0?'正在交接…':(touch()?'刹车入圈，停车交接':'S　刹车入圈，停车交接');
  else if(job&&step?.foot&&driving&&!useCar.hidden&&dist(p,step)<19)context=touch()?'点「下车」取件':'按 F 下车取件';
  else if(touch()&&!driving&&elapsed-startedAt<13)context='拖动画面转向　·　左右平移　·　跳跃　·　出拳';
  else if(!touch()&&elapsed-startedAt<13)context=driving?'W 加速　·　A / D 转向　·　S 刹车　·　空格 手刹':'点击画面转向　·　WASD 行走　·　空格 跳跃　·　左键出拳';
- if(sim.inCar&&sim.car.userData.model===2&&streetRadio?.mode==='off'&&!context)context='停稳后按 B，在这个街区开一场流动电台';if(!context)context=chapter.town.hint();if(action||nearby)context='';if(context!==lastContext){$('context').textContent=context;lastContext=context}
+ if(sim.inCar&&sim.car.userData.model===2&&streetRadio?.mode==='off'&&!context)context='停稳后按 B，在这个街区开一场流动电台';
+ if(!context&&save.chapter.active&&sim.inCar&&step?.type==='chapter'&&dist(p,step)<18)context='停下车，走过去';
+ if(action||nearby)context='';if(context!==lastContext){$('context').textContent=context;lastContext=context}
  const wp=$('waypoint');wp.hidden=true;if(step){sim.camera.updateMatrixWorld();const dst=dist(p,step),v=hudPoint.set(step.x,5.8,step.z).project(sim.camera);
   if(dst>8&&dst<200&&v.z<1&&v.z>0&&Math.abs(v.x)<.88&&Math.abs(v.y)<.70){wp.hidden=false;wp.style.left=((v.x+1)*50)+'%';wp.style.top=((1-v.y)*50)+'%';write(wp.lastElementChild,Math.round(dst)+' m')}}
- const patrols=visiblePatrols();if(minimapDirty(p,step,patrols))paintMap($('minimap'),p,step,save,sim.world.footprints,false,race,patrols);
+ const patrols=visiblePatrols();if(minimapDirty(p,step,patrols))paintMap($('minimap'),p,step,save,sim.world.footprints,false,race,patrols,sim.heat);
 }
 const headers={chapters:['STORY ARCHIVE','选章试玩'],sync:['CITY ARCHIVE','另一窗口已保存进度'],help:['CONTROLS','操作指南'],pause:['PAUSE MENU','已暂停'],jobs:['TOKYO BAY JOURNAL','城市手记'],map:['TOKYO BAY / NAVIGATION','城市地图'],drift:['SIDEWAYS CLUB','漂移练习'],cab:['NIGHT DISPATCH','夜班载客'],race:['RACE CONTROL','街头竞速'],garage:['MARLIN CUSTOMS','私人车库'],error:['GRAPHICS','暂时无法进入街区']};
 function showPanel(name){
@@ -269,11 +260,12 @@ function showPanel(name){
  if(name==='sync'){
   body.innerHTML='<p class="panelcopy">载入最新的城市档案，可以从同一笔余额和活动进度继续。</p>'+btn('reload','载入最新进度');
  }else if(name==='chapters'){
-  body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>海浪账本</h3><p>从后院现场开始，重选取回母带的方法。</p>'+btn('sample-yard','重演火烈鸟之夜')+'</div><div class="chaptercard midnightcard"><small>CHAPTER 02　/　98.4 FM</small><h3>午夜暗频</h3><p>从唱片店出发，选择第一章分账后的街区关系。试玩使用独立进度。</p><div class="actions">'+btn('sample-return','上回把尾款还给了乐手')+btn('sample-keep','上回和玛拉留下了现金')+'</div></div>';
+  const journal=chapter?.journal??'夜市档口还有人在谈价。';
+  body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>工资</h3><p>'+journal+'</p>'+btn('playstory',save.chapter.stage==='new'?'开始这一章':'继续这一章')+'</div>';
  }else if(name==='help'){
   body.innerHTML='<div class="helpgrid">'+[['鼠标','步行时转动视角，上下略微俯仰'],['鼠标左键','徒手攻击，身前有人会先贴上去再打'],['W / ↑','驾车油门，步行沿视角前进'],['S / ↓','驾车刹车或倒车，步行后退'],['A / D / ← →','驾车转向，步行左右平移'],['空格','驾车手刹，步行跳跃'],['Shift','氮气加速 / 奔跑'],['E','与附近人物交谈 / 查看物件'],['F','下车 / 就近上车'],['M / J / G','地图 / 调度 / 车库'],['C / R','切换镜头 / 电台'],['B','转播车停稳后，开播或收天线'],['V','明信片相机'],['Esc / P','暂停或恢复']].map(([k,s])=>'<p><kbd>'+k+'</kbd>'+s+'</p>').join('')+'</div><p class="helpnote">金色菱形指向当前剧情目标。对话中可用数字键选择回答。步行时点击画面锁定鼠标；浏览器拒绝锁定时按住右键拖动。触屏拖动空画面转向，左右键是平移，跳跃键在驾车时变为手刹，出拳只在步行时出现。</p>';
  }else if(name==='pause'){
-  body.innerHTML='<div class="ledger"><span>钱包 '+money(save.money)+'</span><span>载客 '+save.trips+' 单</span><span>完赛 '+Object.values(save.records).reduce((n,r)=>n+r.runs,0)+' 场</span></div><div class="menulist">'+[['resume','继续游玩'],['map','城市地图'],['jobs','城市手记'],['garage','私人车库'],['drift','漂移练习'],['night',save.night?'切换至日落':'切换至午夜'],['photo','拍摄明信片'],['view','切换驾驶视角'],['help','操作指南'],['sound',save.sound?'关闭声音':'打开声音'],['rescue','道路救援'],['menu',replay?'结束回放，返回正式存档':'返回主菜单']].map(([k,s])=>'<button data-act="'+k+'">'+s+icon('arrow')+'</button>').join('')+'</div>';
+  body.innerHTML='<div class="ledger"><span>钱包 '+money(save.money)+'</span><span>载客 '+save.trips+' 单</span><span>完赛 '+Object.values(save.records).reduce((n,r)=>n+r.runs,0)+' 场</span></div><div class="menulist">'+[['resume','继续游玩'],['map','城市地图'],['jobs','城市手记'],['garage','私人车库'],['drift','漂移练习'],['night',save.night?'切换至日落':'切换至午夜'],['photo','拍摄明信片'],['view','切换驾驶视角'],['help','操作指南'],['sound',save.sound?'关闭声音':'打开声音'],['rescue','道路救援'],['menu','返回主菜单']].map(([k,s])=>'<button data-act="'+k+'">'+s+icon('arrow')+'</button>').join('')+'</div>';
  }else if(name==='map'){
   const picker='<details class="fleetfinder"><summary>找街车 · 11 款</summary><div class="mapstops">'+additions.map(v=>'<button data-findcar="'+v.key+'">'+v.name+'</button>').join('')+'</div></details>';
   body.innerHTML=navigation(save,sim)+'<div class="mapstops">'+Object.entries(localStops).map(([id,{name}])=>'<button data-place="'+id+'">'+name+'</button>').join('')+'</div>'+picker;paintMap($('bigmap'),sim.pos,target(),save,sim.world.footprints,true,race,visiblePatrols());
@@ -281,24 +273,17 @@ function showPanel(name){
  }else if(name==='cab'){body.innerHTML=cabPanel(save,sim,kind);
  }else if(name==='race'){body.innerHTML=racePanel(save,race,course);drawTrack($('diagram'),course);
  }else if(name==='jobs'){
-  const m=missions[selectedJob];body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>海浪账本</h3><p>'+chapter.journal+'</p>'+(save.chapter.route?'<p>后院做法 · '+routes[save.chapter.route]+'</p>':'')+'<button class="btn hot" data-act="track">'+(save.chapter.active?'返回街头':save.chapter.stage==='new'?'开始故事':'继续这个故事')+'</button>'+(save.chapter.active?btn('untrack','自由漫游'):'')+(save.chapter.ending?btn('replay','重演后院 · 独立进度'):'')+(replay?btn('exitReplay','返回正式存档'):'')+'</div>'+tabs('jobs')+'<div class="joblist">'+missions.map((j,i)=>'<button class="job '+(i===selectedJob?'active':'')+'" data-job="'+i+'"><strong>'+j.name+(save.done.includes(i)?'　✓':'')+'</strong><small>'+j.en+'</small><span>'+money(j.reward)+'</span></button>').join('')+'</div><p class="panelcopy"><strong>'+m.from+'</strong><br>'+m.line+(m.time&&save.best?'<br>个人最佳 '+save.best.toFixed(1)+' 秒':'')+'</p><div class="actions"><button class="btn hot" data-act="accept">'+(save.mission===selectedJob?'继续当前委托':save.done.includes(selectedJob)?'重玩委托':'接下委托')+'</button>'+(save.mission>=0?btn('leave','转为自由漫游'):'')+'</div>';
-  const header=body.querySelector('.chaptercard');
-  if(save.chapter.ending){
-   const second=document.createElement('div');second.className='chaptercard midnightcard';
-   second.innerHTML='<small>CHAPTER 02　/　98.4 FM</small><h3>午夜暗频</h3><p>'+chapter.town.journal+'</p><button class="btn hot" data-act="track">'+(save.midnight.outcome?'回到街头':'追踪午夜暗频')+'</button>'+(save.chapter.active?btn('untrack','暂时自由漫游'):'');header.before(second);
-   header.querySelector('[data-act="track"]')?.remove();header.querySelector('[data-act="untrack"]')?.remove();
-  }
-  if(chapter.town.sideNote){const note=document.createElement('p');note.className='panelcopy streetnote';note.textContent='街头见闻　'+chapter.town.sideNote;header.after(note)}
+  const m=missions[selectedJob];body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>工资</h3><p>'+chapter.journal+'</p><button class="btn hot" data-act="track">'+(save.chapter.active?'返回街头':save.chapter.stage==='new'?'开始故事':'继续这个故事')+'</button>'+(save.chapter.active?btn('untrack','自由漫游'):'')+'</div>'+tabs('jobs')+'<div class="joblist">'+missions.map((j,i)=>'<button class="job '+(i===selectedJob?'active':'')+'" data-job="'+i+'"><strong>'+j.name+(save.done.includes(i)?'　✓':'')+'</strong><small>'+j.en+'</small><span>'+money(j.reward)+'</span></button>').join('')+'</div><p class="panelcopy"><strong>'+m.from+'</strong><br>'+m.line+(m.time&&save.best?'<br>个人最佳 '+save.best.toFixed(1)+' 秒':'')+'</p><div class="actions"><button class="btn hot" data-act="accept">'+(save.mission===selectedJob?'继续当前委托':save.done.includes(selectedJob)?'重玩委托':'接下委托')+'</button>'+(save.mission>=0?btn('leave','转为自由漫游'):'')+'</div>';
  }else if(name==='garage'){
-  body.innerHTML='<div class="studio"><canvas id="studio" width="760" height="225" aria-label="私人跑车三维预览"></canvas><button data-act="rotate" aria-label="旋转车辆">↻</button></div><div class="ledger"><span>'+ (save.chapter.ending==='return'?'熟人价 · 全场八折':'MARLIN TURBO')+'</span><b>'+money(save.money)+'</b></div><div class="switches"><button data-garage="performance" aria-pressed="'+(garageTab==='performance')+'">性能改装</button><button data-garage="paint" aria-pressed="'+(garageTab==='paint')+'">车身涂装</button></div>'+(garageTab==='performance'?modPanel(save):'<div class="swatches">'+paints.map(p=>'<button class="swatch '+(save.paint===p.id?'selected':'')+'" data-paint="'+p.id+'" '+(!save.owned.includes(p.id)&&(p.unlock||save.money<garagePrice(save,p.price))?'disabled':'')+'><i style="background:#'+p.color.toString(16).padStart(6,'0')+'"></i><strong>'+p.name+'</strong><small>'+(save.paint===p.id?'已装备':save.owned.includes(p.id)?'装备':p.unlock?'漂移 '+p.unlock+' 分':money(garagePrice(save,p.price)))+'</small></button>').join('')+'</div>');drawStudio();
+  body.innerHTML='<div class="studio"><canvas id="studio" width="760" height="225" aria-label="私人跑车三维预览"></canvas><button data-act="rotate" aria-label="旋转车辆">↻</button></div><div class="ledger"><span>MARLIN TURBO</span><b>'+money(save.money)+'</b></div><div class="switches"><button data-garage="performance" aria-pressed="'+(garageTab==='performance')+'">性能改装</button><button data-garage="paint" aria-pressed="'+(garageTab==='paint')+'">车身涂装</button></div>'+(garageTab==='performance'?modPanel(save):'<div class="swatches">'+paints.map(p=>'<button class="swatch '+(save.paint===p.id?'selected':'')+'" data-paint="'+p.id+'" '+(!save.owned.includes(p.id)&&(p.unlock||save.money<garagePrice(save,p.price))?'disabled':'')+'><i style="background:#'+p.color.toString(16).padStart(6,'0')+'"></i><strong>'+p.name+'</strong><small>'+(save.paint===p.id?'已装备':save.owned.includes(p.id)?'装备':p.unlock?'漂移 '+p.unlock+' 分':money(garagePrice(save,p.price)))+'</small></button>').join('')+'</div>');drawStudio();
  }else if(name==='error')body.innerHTML='<p class="panelcopy">浏览器未能建立 3D 画面。请启用浏览器的图形加速，或在支持 WebGL 2 的浏览器中重新打开游戏。</p>'+btn('resume','返回');
  $('close').focus();if(screen==='play')audio.update(false,save,0,false,false);
 }
 function drawStudio(){const c=$('studio');if(c)showroom(c,sim,paints.find(p=>p.id===save.paint).color,studioYaw)}
 function closePanel(){if(panel==='sync'){location.reload();return}panel='';$('overlay').hidden=true;resetControls();if(previousFocus instanceof HTMLElement&&previousFocus.offsetParent)previousFocus.focus({preventScroll:true});previousFocus=null}
 function toggleSound(){audio.init();save.sound=!save.sound;audio.update(screen==='play'&&!panel,save,sim?.speed||0,false,!!sim?.inCar);if(save.sound)audio.chime();refreshMenu();persist()}
-function toggleRadio(){audio.init();save.radio=!save.radio;toast(save.radio&&save.chapter.route?chapter.broadcast():save.radio?'FM 98.6 · Bay Wave 正在播放':'车载电台已关闭');persist();updateHUD()}
-function pressE(){if(chapter?.nearby())chapter.action();else if(sim&&!sim.inCar)interact()}
+function toggleRadio(){audio.init();save.radio=!save.radio;toast(save.radio?'FM 98.6 · Bay Wave 正在播放':'车载电台已关闭');persist();updateHUD()}
+function pressE(){if(chapter?.nearby())chapter.action()}
 function interact(car){
  if(!sim||screen!=='play'||panel||chapter?.talk)return;
  if(sim.inCar&&(race?.active||save.cab?.stage==='ride')){toast(race?.active?'完赛后可下车':'先送乘客到目的地');return}
@@ -328,12 +313,8 @@ $('panelbody').addEventListener('click',e=>{
  if(b.dataset.job!==undefined){selectedJob=Number(b.dataset.job);showPanel('jobs');$('panelbody').querySelector('[data-job="'+selectedJob+'"]').focus();return}
  if(b.dataset.paint){const p=paints.find(v=>v.id===b.dataset.paint);if(!p)return;if(!save.owned.includes(p.id)){if(p.unlock||save.money<garagePrice(save,p.price))return;save.money-=garagePrice(save,p.price);save.owned.push(p.id)}save.paint=p.id;sim.applyPaint();persist();audio.chime();showPanel('garage');return}
  const act=b.dataset.act;
- if(act?.startsWith('sample-')){
-  const route=act.slice(7),url=new URL(location.href);url.searchParams.delete('sample');url.searchParams.delete('replay');if(route==='yard')url.searchParams.set('replay','flamingo');else url.searchParams.set('sample',route);
-  location.assign(url.href);return;
- }
+ if(act==='playstory'){closePanel();enter(true);return}
  if(act==='reload'){location.reload();return}if(headers[act]){showPanel(act);return}
- if(act==='replay'){if(replay)location.reload();else replayLocation(true);return}if(act==='exitReplay'){replayLocation(false);return}
  if(act==='track'){closePanel();if(!save.chapter.active)trackChapter();return}if(act==='untrack'){chapter.suspend();closePanel();persist();updateHUD();return}
  if(act==='freeDrift'){eventStart();clearFare();stopRace();persist();toast('漂移练习 · 加速后转向');updateHUD();return}
  if(act==='rotate'){studioYaw+=Math.PI/3;drawStudio();return}
@@ -346,12 +327,12 @@ $('panelbody').addEventListener('click',e=>{
  if(act==='leave'){save.bookmark=null;save.mission=-1;save.step=0;timer=null;sprintLock=false;persist();closePanel();toast('自由漫游 · 随时可以接下委托');updateHUD()}
  if(act==='photo'){closePanel();openPhoto()}
  if(act==='resume')closePanel();if(act==='menu')backMenu();if(act==='sound'){toggleSound();showPanel('pause')}
- if(act==='rescue'){if(save.chapter.active&&save.chapter.stage==='escape'){closePanel();toast('警戒中。玛拉提醒你可以找门房核对母带。');return}if(race.active||save.cab){closePanel();toast('请先在调度中结束当前活动再呼叫救援');return}sim.rescue();persist();closePanel()}
+ if(act==='rescue'){if(race.active||save.cab){closePanel();toast('请先在调度中结束当前活动再呼叫救援');return}sim.rescue();persist();closePanel()}
  if(act==='view'){changeView();closePanel()}
 });
 $('chapters').onclick=()=>showPanel('chapters');$('sceneAction').onclick=()=>{if(shownSceneAction&&chapter.nearby()===shownSceneAction)chapter.action();else updateHUD()};$('walkAway').onclick=()=>chapter.close();$('story').onclick=()=>enter(true);$('roam').onclick=()=>enter(false);$('help').onclick=()=>showPanel('help');$('close').onclick=closePanel;$('pause').onclick=()=>showPanel('pause');
 $('missionbtn').onclick=()=>{if(save.mission>=0)selectedJob=save.mission;showPanel(race?.active?'race':save.cab?'cab':'jobs')};$('minimapbtn').onclick=()=>showPanel('map');$('radio').onclick=toggleRadio;$('touchF').onclick=()=>{if(shownCarAction)interact(shownCarAction)};
-$('nextjob').onclick=()=>{rewardUntil=0;if(rewardMode==='race')startRace();else if(rewardMode==='cab')startFare();else beginJob(selectedJob)};$('rewardpaint').onclick=()=>{rewardUntil=0;showPanel('garage')};$('cruise').onclick=()=>{rewardUntil=0;updateHUD()};
+$('nextjob').onclick=()=>{rewardUntil=0;if(rewardMode==='race')startRace();else if(rewardMode==='cab')startFare();else if(rewardMode==='chapter')updateHUD();else beginJob(selectedJob)};$('rewardpaint').onclick=()=>{rewardUntil=0;showPanel('garage')};$('cruise').onclick=()=>{rewardUntil=0;updateHUD()};
 $('overlay').addEventListener('click',e=>{if(e.target===$('overlay'))closePanel()});
 document.querySelector('.sound').onclick=toggleSound;
 const full=document.querySelector('.fullscreen');if(!document.documentElement.requestFullscreen&&!document.documentElement.webkitRequestFullscreen)full.hidden=true;

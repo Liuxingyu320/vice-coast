@@ -170,7 +170,7 @@ export class Simulation{
   this.save=save;this.notify=notify;this.r=rng(120);this.scene=new T.Scene();this.camera=new T.PerspectiveCamera(62,1,.19,2000);
   this.renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});this.renderer.setClearColor(0xc88c99);
   this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFShadowMap;this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;
-  this.world=createWorld(this.scene);this.marks=makeTyreMarks(this.scene);this.speed=0;this.idleAngle=.43;this.boost=1;this.time=0;this.heat=0;this.chaos=0;this.spotted=false;this.seenAt=null;this.unseen=false;this.chaosClock=0;this.hits=0;this.hitCooldown=0;this.shake=0;this.safe=0;this.nextMark=0;this.camA=0;this.lookPitch=0;this.vy=0;this.jumpHeld=false;this.coyote=0;this.jumpBuffer=0;this.walkV={x:0,z:0};this.smoothSteer=0;this.inCar=true;this.punch=null;this.punchBuffer=false;this.punchTarget=null;this.punchVictim=null;this.combo=0;this.comboUntil=0;this.hitStop=0;
+  this.world=createWorld(this.scene);this.marks=makeTyreMarks(this.scene);this.speed=0;this.idleAngle=.43;this.boost=1;this.time=0;this.heat=0;this.chaos=0;this.spotted=false;this.seenAt=null;this.unseen=false;this.chaosClock=0;this.hits=0;this.hitCooldown=0;this.shake=0;this.safe=0;this.nextMark=0;this.camA=0;this.lookPitch=0;this.vy=0;this.jumpHeld=false;this.coyote=0;this.jumpBuffer=0;this.walkV={x:0,z:0};this.smoothSteer=0;this.inCar=true;this.punch=null;this.punchBuffer=false;this.punchTarget=null;this.punchVictim=null;this.combo=0;this.comboUntil=0;this.hitStop=0;this.health=100;this.healthUntil=0;this.playerHitUntil=0;
   this.cars=(save.fleet??[spawn,...parkedSpots]).map((p,i)=>{
    const style=streetStyles[p.trafficId];
    const m=style?makeCar(style.color,p.model??style.model,false):makeCar(parkedColors[i],i%2,true);
@@ -498,7 +498,7 @@ export class Simulation{
   const a=spawn.a;
   this.resetVehicleMotion(this.car);
   this.speed=0;this.vy=0;this.smoothSteer=0;this.walkV.x=this.walkV.z=0;this.motionA=a;this.shake=0;
-  this.busted=true;
+  this.busted=true;this.health=100;this.healthUntil=0;
   if(this.inCar){this.pos={x:spawn.x,z,a};this.hero.visible=false;this.syncCar();this.resetCamera()}
   else{
    this.car.position.set(spawn.x,.07,z);this.car.rotation.y=a;
@@ -869,7 +869,27 @@ export class Simulation{
   }
   return false;
  }
+ checkPlayerVehicleImpact(){
+  if(this.playerHitUntil>this.time)return;
+  const x=this.pos.x,z=this.pos.z,walkVelocity=this.walkV?.z||0;
+  for(let i=0;i<this.pedestrianMotionCount;i++){
+   const motion=this._pedestrianVehicleMotions[i];
+   if(x<motion.minX||x>motion.maxX||z<motion.minZ||z>motion.maxZ)continue;
+   const relativeZ=motion.vz-walkVelocity;
+   if(motion.vx**2+relativeZ**2<=walkSpeed**2)continue;
+   const hit=sweepCircleAgainstVehicle(motion,motion.dx,motion.dz,x,z,walkerRadius);
+   if(!hit||hit.fraction===0&&this.circleHitsBox(x,z,walkerRadius,motion))continue;
+   const speed=motion.vx*hit.nx+relativeZ*hit.nz;
+   if(speed<=walkSpeed||!this.clearScenerySegment(motion.x+motion.dx*hit.fraction,motion.z+motion.dz*hit.fraction,x,z))continue;
+   const damage=speed>=walkerLethalSpeed?100:Math.round(12+(speed-walkSpeed)*6);
+   this.playerHitUntil=this.time+.45;
+   this.health=Math.max(0,this.health-damage);this.healthUntil=this.time+4;this.shake=Math.max(this.shake,.45);
+   if(this.health===0){this.health=40;this.notify('被车撞倒')}
+   return;
+  }
+ }
  stepWalkers(dt){
+  if(!this.inCar&&dt>0)this.checkPlayerVehicleImpact();
   const me=this.pos,cars=this.closingCars();
   for(const n of this.walkers){
    if(dt>0&&n.health>0)this.checkWalkerVehicleImpact(n);
@@ -1247,7 +1267,7 @@ export class Simulation{
   this.moveVehicleBodies(commands,dt);
   this.stepWalkers(dt);
  }
- update(dt,keys,target){this.time+=dt;this.hitCooldown-=dt;this.hitStop=Math.max(0,this.hitStop-dt);this.shake=Math.max(0,this.shake-dt*2.7);
+ update(dt,keys,target){this.time+=dt;if(this.health<100&&this.time>this.healthUntil)this.health=Math.min(100,this.health+dt*12);this.hitCooldown-=dt;this.hitStop=Math.max(0,this.hitStop-dt);this.shake=Math.max(0,this.shake-dt*2.7);
   this.pedestrianMotionCount=0;
   if(this.inCar){this.punch=null;this.punchBuffer=false;this.comboUntil=0}else this.walk(dt,keys);
   this.movingCity(dt,keys);

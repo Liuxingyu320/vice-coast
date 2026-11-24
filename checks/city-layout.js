@@ -1,7 +1,6 @@
 import {Box3, Matrix4, Scene, Vector3} from 'three';
 import {loadStudio} from '../src/blender-assets.js';
 import {clearOfCrossStreets, loadSave, parkedSpots, roadWidth, spawn, xs, zs} from '../src/data.js';
-import {makeMidnightSet} from '../src/midnight-set.js';
 import {Simulation} from '../src/simulation.js';
 import {additions, streetResidents} from '../src/street-catalog.js';
 import {createWorld} from '../src/world.js';
@@ -65,7 +64,6 @@ async function checkCity() {
  await loadStudio();
  const scene = new Scene();
  const world = createWorld(scene);
- makeMidnightSet({scene, world, footHeight: () => .14});
  scene.updateMatrixWorld(true);
  const half = roadWidth / 2;
  // The paved strips continue one metre past the outermost intersection.
@@ -117,7 +115,6 @@ async function checkCity() {
  Object.assign(save.fleet[1], {x:favorite.x, z:favorite.z});
  save.pin = {vehicleKey:favorite.key, x:favorite.x, z:favorite.z};
  const sim = new Simulation(document.querySelector('canvas'), save, () => {});
- makeMidnightSet(sim);
  for(let x=148.5;x>=136;x-=.25){
   check(!sim.blocked(x,54.4,.32,false),'Record shop entrance obstructed at x='+x);
  }

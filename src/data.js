@@ -1,4 +1,4 @@
-import {readLedger,readMidnight} from './ledger-state.js';
+import {readLedger,droppedStory} from './ledger-state.js';
 import {additions} from './street-catalog.js';
 export const xs=[-240,-160,-80,0,80,160], zs=[-240,-160,-80,0,80,160,240];
 export const roadWidth=20;
@@ -7,18 +7,11 @@ export const cornerClearance=roadWidth/2+2;
 export const clearOfCrossStreets=(z,halfDepth=0)=>zs.every(cross=>Math.abs(z-cross)>cornerClearance+halfDepth);
 export const spawn={x:164.3,z:134,a:0};
 export const missions=[
- {name:'午夜频率',en:'MIDNIGHT FREQUENCY',from:'莉亚 · 海岸电台',line:'演出只差一盘母带。去唱片店取货，再送到海边的现场。',reward:650,steps:[
-  {x:164.2,z:63,label:'到波音唱片店取母带',note:'母带已装车。莉亚在摩天轮旁等你。'},
-  {x:164.2,z:-127,label:'把母带送到潮见码头',note:'莉亚「母带上机。刚才跑热轮胎的那位，这首送给你。」'}]},
  {name:'霓虹计时赛',en:'NEON SPRINT',from:'索尔 · 夜跑车会',line:'从湾岸通起跑，穿过霓虹区。发车后 80 秒内通过三个计时点。',reward:1100,time:80,steps:[
   {x:164.2,z:15,label:'驶入夜跑起点',note:'开始计时。穿过下一个光圈！'},
   {x:83.8,z:-74,label:'通过霓虹区计时点',note:'第一个计时点通过。'},
   {x:4,z:-150,label:'通过芝浦广场计时点',note:'最后一段，终点在酒店街。'},
-  {x:151,z:-235.8,label:'冲过酒店街终点',note:'终点计时已锁定。'}]},
- {name:'滨海拾光',en:'THE LAST EXPOSURE',from:'诺亚 · 街头摄影师',line:'摄影师留下了两卷胶片。到深川下町的露台步行取件，再送去有明照相馆。',reward:900,steps:[
-  {x:-84,z:83,label:'开到深川下町会合点',note:'下车后到露台边取胶片。'},
-  {x:-91.8,z:95,label:'步行到露台边取胶片',foot:true,note:'拿到胶片。回车里送去冲印店。'},
-  {x:84,z:145,label:'把胶片送到有明照相馆',note:'底片交接完成。海岸的黄昏留住了。'}]}
+  {x:151,z:-235.8,label:'冲过酒店街终点',note:'终点计时已锁定。'}]}
 ];
 export const tapes=[
  {x:174,z:95,name:'海风倒带'}, {x:178,z:-115,name:'码头余辉'}, {x:13,z:-48,name:'落日调频'},
@@ -62,15 +55,16 @@ export function route(a,b){
 export const editionKey='vicecoast.ledger.1';
 export function readEdition(){try{return localStorage.getItem(editionKey)}catch{return null}}
 export function loadSave(snapshot=readEdition()){
- const base={chapter:readLedger(),midnight:readMidnight(null,{}),heldCab:null,money:0,done:[],tapes:[],owned:['cherry'],paint:'cherry',mission:-1,step:0,best:0,car:0,pos:{...spawn},radio:true,sound:true,view:0,fleet:null,walker:null,bookmark:null,night:true,driftBest:0,trips:0,cabIncome:0,perfect:0,mods:{engine:0,brakes:0,nitro:0},records:{},cab:null,pin:null};
+ const base={chapter:readLedger(),heldCab:null,money:0,done:[],tapes:[],owned:['cherry'],paint:'cherry',mission:-1,step:0,best:0,car:0,pos:{...spawn},radio:true,sound:true,view:0,fleet:null,walker:null,bookmark:null,night:true,driftBest:0,trips:0,cabIncome:0,perfect:0,mods:{engine:0,brakes:0,nitro:0},records:{},cab:null,pin:null};
  try{let d;
  for(const raw of [snapshot,localStorage.getItem('vicecoast.afterhours.1'),localStorage.getItem('vicecoast.save.1')]){try{const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed)){d=parsed;break}}catch{}}
- if(!d)return base; base.chapter=readLedger(d.chapter);base.midnight=readMidnight(d.midnight,base.chapter);
- for(const [k,max] of [['done',3],['tapes',6]])if(Array.isArray(d[k]))base[k]=[...new Set(d[k].filter(v=>Number.isInteger(v)&&v>=0&&v<max))];
+ if(!d)return base; const legacy=droppedStory(d.chapter);base.chapter=readLedger(d.chapter);
+ if(Array.isArray(d.tapes))base.tapes=[...new Set(d.tapes.filter(v=>Number.isInteger(v)&&v>=0&&v<6))];
+ if(Array.isArray(d.done))base.done=[...new Set((legacy?d.done.includes(1)?[0]:[]:d.done).filter(v=>v===0))];
  if(Number.isFinite(d.money))base.money=Math.max(0,Math.floor(d.money));
  if(Array.isArray(d.owned))base.owned=[...new Set(['cherry',...d.owned.filter(v=>paints.some(p=>p.id===v))])];
  if(base.owned.includes(d.paint))base.paint=d.paint;
- if(Number.isInteger(d.mission)&&missions[d.mission]){base.mission=d.mission;base.step=clamp(Math.trunc(d.step)||0,0,missions[d.mission].steps.length-1);if(missions[d.mission].time)base.step=0}
+ const mission=legacy?d.mission===1?0:-1:d.mission;if(Number.isInteger(mission)&&missions[mission]){base.mission=mission;base.step=clamp(Math.trunc(d.step)||0,0,missions[mission].steps.length-1);if(missions[mission].time)base.step=0}
  const pose=p=>p&&[p.x,p.z,p.a].every(Number.isFinite)?{x:clamp(p.x,-255,224),z:clamp(p.z,-255,255),a:p.a}:null;
  base.pos=pose(d.pos)||base.pos;base.walker=pose(d.walker);
  const fixedCars=parkedSpots.length+1;
@@ -85,7 +79,7 @@ export function loadSave(snapshot=readEdition()){
    used.add(id);base.fleet.push({...p,trafficId:id,model});
   }
  }
- if(d.bookmark&&Number.isInteger(d.bookmark.id)&&missions[d.bookmark.id]){const m=missions[d.bookmark.id];base.bookmark={id:d.bookmark.id,step:m.time?0:clamp(Math.trunc(d.bookmark.step)||0,0,m.steps.length-1)}}
+ if(d.bookmark&&Number.isInteger(d.bookmark.id)){const id=legacy?d.bookmark.id===1?0:-1:d.bookmark.id;if(missions[id]){const m=missions[id];base.bookmark={id,step:m.time?0:clamp(Math.trunc(d.bookmark.step)||0,0,m.steps.length-1)}}}
  if(Number.isInteger(d.car))base.car=clamp(d.car,0,(base.fleet?.length??fixedCars)-1);
  if(Number.isFinite(d.best)&&d.best>0)base.best=d.best;
  for(const k of ['sound','radio'])if(typeof d[k]==='boolean')base[k]=d[k];

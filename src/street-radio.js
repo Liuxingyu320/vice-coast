@@ -22,9 +22,7 @@ export class StreetRadio{
  }
  get canUse(){return this.sim.inCar&&this.sim.car.userData.model===2&&Math.abs(this.sim.speed)<1&&!this.sim.heat&&this.api.free()}
  tracks(){
-  const s=this.save.midnight,list=[['coast','海风序曲']];
-  if(s.vinyl==='catalogued'||s.vinyl==='delivered')list.push(['sideb','Side B · 露兹的首版']);
-  if(s.outcome)list.push(s.outcome==='live'?['live','退潮以后 · 玛拉现场']:['sponsor','午夜热线 · 雷蒙']);
+  const list=[['coast','海风序曲']];
   for(const i of this.save.tapes)list.push(['tape'+i,tapes[i].name]);
   return list;
  }
@@ -90,9 +88,9 @@ export class StreetRadio{
   if(this.mode==='live'){
    this.audience(dt,false);
    if(this.age>=this.nextTip){
-    const tip=(this.zone==='湾岸通'?17:this.zone==='新桥商区'?21:14)+(this.nextTip>=24?8:0)+(this.track==='sideb'?5:0);
-    this.nextTip+=8;this.earned+=tip;this.save.money+=tip;this.save.midnight.tips+=tip;
-    if(this.nextTip===16)this.save.midnight.shows++;this.api.persist();this.api.chime();this.api.toast('听众打赏　＋$'+tip,2.3);
+    const tip=(this.zone==='湾岸通'?17:this.zone==='新桥商区'?21:14)+(this.nextTip>=24?8:0);
+    this.nextTip+=8;this.earned+=tip;this.save.money+=tip;
+    this.api.persist();this.api.chime();this.api.toast('听众打赏　＋$'+tip,2.3);
    }
    if(this.age>=42){this.stop(true);return}
   }

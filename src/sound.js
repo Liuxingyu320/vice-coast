@@ -1,10 +1,33 @@
 import bumpClip from '../assets/vehicle-bump.wav';
 import crashClip from '../assets/vehicle-crash.wav';
 import scrapeClip from '../assets/vehicle-scrape.wav';
+import barkMmm from '../assets/voices/mmm.mp3';
+import barkEhhh from '../assets/voices/ehhh.mp3';
+import barkLaugh from '../assets/voices/laugh.mp3';
+import barkHaha from '../assets/voices/wahaha.wav';
+import barkCrowd from '../assets/voices/crowd.mp3';
+import barkGasp from '../assets/voices/gasp.mp3';
+import barkWow from '../assets/voices/wow.mp3';
+import barkWhat from '../assets/voices/what.mp3';
+import barkSurprised from '../assets/voices/surprised.mp3';
+import barkNope from '../assets/voices/nope.mp3';
+const barkClips={
+ mmm:barkMmm,ehhh:barkEhhh,laugh:barkLaugh,haha:barkHaha,crowd:barkCrowd,
+ gasp:barkGasp,wow:barkWow,what:barkWhat,surprised:barkSurprised,nope:barkNope
+};
+const barkPools={
+ street:['mmm','ehhh','laugh','what'],
+ hush:['mmm','ehhh','what'],
+ snap:['ehhh','nope','what'],
+ laugh:['laugh','haha','crowd'],
+ shock:['gasp','wow','surprised'],
+ tight:['ehhh','gasp','mmm','what']
+};
+const barkRates={street:[.94,1,1.06],hush:[.86,.93,1],snap:[1,1.07,1.14],laugh:[.96,1,1.05],shock:[.98,1.05,1.12],tight:[.9,.97,1.03]};
 
 // The radio is sequenced locally, including its synths and drum voices.
 export class CoastAudio{
- constructor(){this.ctx=null;this.beat=0;this.next=0;this.voices=[];this.roomVoices=[];this.collisionVoices=new Set();this.scrapes=new Map()}
+ constructor(){this.ctx=null;this.beat=0;this.next=0;this.voices=[];this.roomVoices=[];this.collisionVoices=new Set();this.scrapes=new Map();this.barks=null;this.barkVoice=null}
  init(){
   const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;
   if(this.ctx){if(this.ctx.state==='suspended')this.ctx.resume().catch(()=>{});return}
@@ -16,7 +39,35 @@ export class CoastAudio{
    this.noise=c.createBuffer(1,Math.floor(c.sampleRate*.25),c.sampleRate);const arr=this.noise.getChannelData(0);
    for(let i=0;i<arr.length;i++)arr[i]=(Math.random()-.5)*2;
   }catch{this.ctx=null}
-  if(this.ctx)this.loadVehicleSamples().catch(error=>console.warn('Could not decode vehicle audio',error));
+  if(this.ctx){this.loadVehicleSamples().catch(error=>console.warn('Could not decode vehicle audio',error));this.loadBarks().catch(error=>console.warn('Could not decode voice barks',error))}
+ }
+ bark(name){
+  if(!this.ctx)return;
+  this.barkName=name??this.barkName;
+  if(!this.barks){this.loadBarks().then(()=>{const pick=this.barkName;this.barkName=null;this.bark(pick)}).catch(()=>{});return}
+  let choice=name,rate=1;
+  const pool=barkPools[name];
+  if(pool){
+   const fresh=pool.filter(id=>id!==this.lastBark);
+   const list=fresh.length?fresh:pool;
+   choice=list[Math.floor(Math.random()*list.length)];
+   const speeds=barkRates[name];
+   rate=speeds[Math.floor(Math.random()*speeds.length)];
+  }
+  const buffer=this.barks[choice]??this.barks.mmm;
+  this.lastBark=choice;
+  if(this.barkVoice){try{this.barkVoice.stop()}catch{}}
+  const c=this.ctx,source=c.createBufferSource(),gain=c.createGain();
+  source.buffer=buffer;source.playbackRate.value=rate;
+  gain.gain.value=name==='hush'?.3:(name==='laugh'||name==='shock')?.5:.4;
+  source.connect(gain).connect(this.master);this.barkVoice=source;
+  source.onended=()=>{if(this.barkVoice===source)this.barkVoice=null;source.disconnect();gain.disconnect()};
+  source.start();
+ }
+ loadBarks(){
+  if(this.barks||!this.ctx)return Promise.resolve();
+  if(!this.barkTask)this.barkTask=Promise.all(Object.entries(barkClips).map(async([id,bytes])=>[id,await this.ctx.decodeAudioData(bytes.slice().buffer)])).then(list=>{this.barks=Object.fromEntries(list)});
+  return this.barkTask;
  }
  cut(list){
   if(!list.length)return;const t=this.ctx?this.ctx.currentTime:0,pending=list.splice(0,list.length);
@@ -131,7 +182,7 @@ export class CoastAudio{
   const siren=active&&save.sound?Math.max(0,1-patrolDistance/68):0;
   this.sirenLevel.gain.setTargetAtTime(.085*siren*siren,t,.10);
   if(siren>0)this.siren.frequency.setTargetAtTime(685+235*Math.sin(t*5.2),t,.04);
-  const show=track??save.midnight?.outcome;
+  const show=track;
   if(!active||!save.sound||(!save.radio&&!track)||!driving){if(save.sound)this.cut(this.voices);this.next=t;return}
   if(this.tune!==track||this.show!==show){this.cut(this.voices);this.tune=track;this.show=show;this.next=t}
   if(this.next<t)this.next=t+.02;
