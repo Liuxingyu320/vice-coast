@@ -1,11 +1,15 @@
 import * as T from 'three';
+import wearUrl from '../../assets/shiba-road-wear.jpg';
+import poolsUrl from '../../assets/shiba-street-light.jpg';
 import detailUrl from '../../assets/shiba-ground-detail.jpg';
 import coverUrl from '../../assets/shiba-land-cover.png';
 
 export function finishPavement(district, data, evening) {
   const loader = new T.TextureLoader(),
     detail = loader.load(detailUrl),
-    cover = loader.load(coverUrl);
+    cover = loader.load(coverUrl),
+    wear = loader.load(wearUrl),
+    pools = loader.load(poolsUrl);
   detail.colorSpace = T.SRGBColorSpace;
   detail.anisotropy = 8;
   const g = data.height,
@@ -13,7 +17,7 @@ export function finishPavement(district, data, evening) {
   district.traverse((o) => {
     if (!o.isMesh) return;
     const ground = ['shiba-ground', 'skyline-ground'].includes(o.name),
-      paved = o.name.startsWith('paving-');
+      paved = o.name.startsWith('paving-') || o.name.startsWith('skyline-street-');
     if (!ground && !paved) return;
     const m = (o.material = ground ? o.material.clone() : o.material);
     if (m.userData.siteFinish) return;
@@ -26,9 +30,35 @@ export function finishPavement(district, data, evening) {
     }
     const asphalt = m.name === 'Cold asphalt',
       paint = ['White paint', 'Amber paint'].includes(m.name);
+    if (m.name === 'Canal water') {
+      m.roughness = 0.23;
+      m.metalness = 0.32;
+      m.color.set('#b0cfca');
+      m.envMapIntensity = 0.85;
+      m.onBeforeCompile = (sh) => {
+        sh.vertexShader =
+          'varying vec2 waterEN;\n' +
+          sh.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\nwaterEN=(modelMatrix*vec4(transformed,1.)).xz;',
+          );
+        sh.fragmentShader =
+          'varying vec2 waterEN;\n' +
+          sh.fragmentShader.replace(
+            '#include <normal_fragment_maps>',
+            `#include <normal_fragment_maps>
+          vec2 ripple=vec2(sin(waterEN.x*6.4+waterEN.y*3.8+sin(waterEN.y*1.7)),sin(waterEN.y*4.1-waterEN.x*2.9));
+          normal=normalize(normal+mat3(viewMatrix)*vec3(ripple.x*.020,0.,ripple.y*.012));`,
+          );
+      };
+      m.customProgramCacheKey = () => 'furukawa-water';
+      return;
+    }
     if (asphalt) {
       m.metalness = 0;
-      m.envMapIntensity = 0.22;
+      m.envMapIntensity = 0.72;
+      m.bumpMap = m.map;
+      m.bumpScale = 0.004;
       m.emissive.setRGB(0.013, 0.016, 0.021);
       m.emissiveIntensity = 0.55;
     } else if (paint) {
@@ -46,6 +76,8 @@ export function finishPavement(district, data, evening) {
         groundAtlas: { value: detail },
         landCover: { value: cover },
         landFrame: { value: frame },
+        streetPools: { value: pools },
+        roadWear: { value: wear },
       });
       sh.vertexShader =
         'varying vec2 siteEN;\n' +
@@ -54,7 +86,7 @@ export function finishPavement(district, data, evening) {
           '#include <begin_vertex>\nvec3 site=(modelMatrix*vec4(transformed,1.)).xyz;siteEN=vec2(site.x,-site.z);',
         );
       sh.fragmentShader =
-        `varying vec2 siteEN;uniform float evening;uniform sampler2D groundAtlas,landCover;uniform vec4 landFrame;
+        `varying vec2 siteEN;uniform float evening;uniform sampler2D groundAtlas,landCover,streetPools,roadWear;uniform vec4 landFrame;
         vec3 grainMap(float id,vec2 p) {
           vec2 uv=vec2((id+.004+.992*fract(p.x))/3.,.004+.992*fract(p.y));
           return textureGrad(groundAtlas,uv,dFdx(p)*vec2(.992/3.,.992),dFdy(p)*vec2(.992/3.,.992)).rgb;
@@ -63,12 +95,20 @@ export function finishPavement(district, data, evening) {
           .replace(
             '#include <map_fragment>',
             `#include <map_fragment>
-        vec3 land=texture2D(landCover,(siteEN-landFrame.xy)/landFrame.zw).rgb;
+        vec2 mapEN=(siteEN-landFrame.xy)/landFrame.zw;vec3 land=texture2D(landCover,mapEN).rgb;
+        vec3 pool=texture2D(streetPools,mapEN).rgb;
+        ${
+          asphalt
+            ? `vec3 wear=texture2D(roadWear,mapEN).rgb;
+          diffuseColor.rgb*=1.30+.26*(wear.g-.5)-.09*wear.r;
+          diffuseColor.rgb+=vec3(.0052,.0056,.0060)*(.45+.48*wear.g);`
+            : ''
+        }
         ${
           ground
             ? `vec3 ortho=diffuseColor.rgb;
           float green=smoothstep(-.024,.034,ortho.g-ortho.r);
-          float grass=clamp(.64*green+.56*land.g,0.,1.);
+          float grass=clamp(.95*land.g+.81*smoothstep(.016,.092,ortho.g-ortho.r),0.,1.);
           float dirt=clamp(.35+2.8*(ortho.r-ortho.b),.12,.87);
           vec3 fabric=mix(mix(grainMap(2.,siteEN/1.48),grainMap(1.,siteEN/1.96),dirt),grainMap(0.,siteEN/1.65),grass);
           float distanceToViewer=length(siteEN-vec2(cameraPosition.x,-cameraPosition.z));
@@ -80,7 +120,9 @@ export function finishPavement(district, data, evening) {
           )
           .replace(
             '#include <emissivemap_fragment>',
-            '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=land.b*evening*vec3(.092,.064,.033);',
+            `#include <emissivemap_fragment>
+          float slant=1.-clamp(abs(dot(normalize(vViewPosition),normal)),0.,1.);
+          totalEmissiveRadiance+=evening*(pool*pool*vec3(.32,.30,.27)*(.72+.36*slant)+land.b*vec3(.042,.032,.020));`,
           )
           .replace(
             '#include <roughnessmap_fragment>',
@@ -88,14 +130,14 @@ export function finishPavement(district, data, evening) {
           ${
             asphalt
               ? `vec2 macro=vMapUv*.43;float field=.50+.22*sin(macro.x+.57*sin(macro.y))+.17*cos(macro.y*.61-macro.x*.43)+.11*sin(macro.y*.53+macro.x*.81);
-          roughnessFactor=.45+.40*clamp(field,0.,1.);`
+          roughnessFactor=clamp(.45+.40*(field*.55+wear.g*.45)-.06*wear.r-.10*evening*wear.b,.40,.85);`
               : ''
           }`,
           )
           .replace(
             '#include <lights_physical_fragment>',
             `#include <lights_physical_fragment>
-          ${asphalt ? 'material.specularColor*=.14;material.specularF90=.045;' : ground ? 'material.specularColor*=.3;material.specularF90=.14;' : 'material.specularColor*=.67;material.specularF90=.34;'}`,
+          ${asphalt ? 'material.specularColor*=.53;material.specularF90=.19;' : ground ? 'material.specularColor*=.3;material.specularF90=.14;' : 'material.specularColor*=.67;material.specularF90=.34;'}`,
           );
     };
     m.customProgramCacheKey = () => 'survey-ground-' + m.name + '-' + ground;

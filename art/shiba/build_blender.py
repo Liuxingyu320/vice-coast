@@ -16,6 +16,8 @@ from materials import FACADE
 from surface_mesh import blocks_for_site
 from trees import prototype
 from main_hall import sanctuary
+from foottown import open_shelter, foottown
+from station_sites import DAIMON_A6, SHIBA_A3, BASIN
 from street_reference import add_street_reference
 from native_materials import detail_materials
 
@@ -30,7 +32,15 @@ blocks = [b for b in blocks if b[1] != "shiba-ground"]
 surface_roles = pickle.load(open(CACHE / "roof-flags.pkl", "rb"))
 bridges, backdrop = pickle.load(open(CACHE / "context.pkl", "rb"))
 bridges = pickle.load(open(CACHE / "viaducts.pkl", "rb"))
-blocks.extend(bridges)
+from bridge_feet import embed
+
+pier_tips = []
+for group, fid, title, arr in bridges:
+    geometry, buried = embed(arr, layout["height"])
+    blocks.append((group, fid, title, geometry))
+    if fid != "skyline-viaduct":
+        pier_tips.extend([[fid, *p] for p in buried])
+(CACHE / "bridge-bases.json").write_text(json.dumps(pier_tips))
 blocks.extend(backdrop)
 pages, facades, far_ground = pickle.load(open(CACHE / "context/detailed.pkl", "rb"))
 far_ground, horizon = pickle.load(open(CACHE / "horizon-grade.pkl", "rb"))
@@ -69,6 +79,9 @@ for key in [
     "Kerb granite",
     "Hall window",
     "Hall gilt",
+    "FootTown glazing",
+    "FootTown panel",
+    "FootTown frame",
     "Hall handrail",
     "Stair nosing",
     "Stair riser",
@@ -79,6 +92,9 @@ for key in [
 city_materials = np.asarray([names.index(k) for k in FACADE])
 temple = layout["verifiedBuildings"]["增上寺大殿"]
 tower_id = "bldg_7aff4a51-be8b-405b-abe4-ac489697cbc8"
+from passages import open_drive
+
+passages = json.loads((CACHE / "passages.json").read_text())
 for i, (group, fid, label, arr) in enumerate(list(blocks)):
     v, f, uv, mi = arr
     if group == "Building" and fid in gate_ids:
@@ -142,6 +158,16 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
                 new[blank & vertical] = names.index("Gate plaster")
                 new[(blank & ~vertical) | (mi == 2)] = names.index("Ibushi roof tiles")
     updated = (v, f, uv, new.astype("i2"))
+    if group == "Building" and fid in (DAIMON_A6, SHIBA_A3, BASIN):
+        blocks.append(("Reference", fid, label + " · 測量外殻", arr))
+        updated, surface_roles[fid] = open_shelter(
+            updated, surface_roles[fid], fid, names
+        )
+    if group == "Building" and fid == tower_id:
+        updated, surface_roles[fid] = foottown(
+            updated, surface_roles[fid], names, layout["height"]
+        )
+        facade_styles[fid] = np.pad(facade_styles[fid], (0, len(updated[0]) - len(v)))
     if fid == temple and group == "Building":
         blocks.append(("Reference", fid, "大殿 · PLATEAU LOD2", arr))
         updated, surface_roles[fid], stairs = sanctuary(
@@ -151,6 +177,15 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
             json.dumps(stairs, separators=(",", ":")) + "\n"
         )
         facade_styles[fid] = np.pad(facade_styles[fid], (0, len(updated[0]) - len(v)))
+    if group == "Building" and fid in passages:
+        updated, surface_roles[fid] = open_drive(
+            updated,
+            surface_roles[fid],
+            passages[fid],
+            names.index("Bridge concrete"),
+            layout["height"],
+        )
+        facade_styles[fid] = np.full(len(updated[0]), style, "f4")
     blocks[i] = (group, fid, label, updated)
 (DEST / "shiba-gate-supports.json").write_text(
     json.dumps(supports, separators=(",", ":"))
@@ -167,6 +202,29 @@ blocks.extend(
         names,
     )
 )
+from materials import SURFACE
+
+for k, (v, f, uv, _) in pickle.load(open(CACHE / "edge-streets.pkl", "rb")).items():
+    blocks.append(
+        (
+            "Backdrop",
+            "skyline-street-" + k,
+            "街区周辺 · " + k,
+            (v, f, uv, np.full(len(f), names.index(SURFACE[k]), "i2")),
+        )
+    )
+for key, (v, f, uv, _) in pickle.load(open(CACHE / "river-joinery.pkl", "rb")).items():
+    material = SURFACE["water" if key == "channel" else "bank"]
+    if material not in names:
+        names.append(material)
+    blocks.append(
+        (
+            "Terrain",
+            "paving-" + key,
+            "古川 · " + key,
+            (v, f, uv, np.full(len(f), names.index(material), "i2")),
+        )
+    )
 tree_models = {}
 for kind in range(3):
     fid = "tree-prototype-" + str(kind)
@@ -262,6 +320,13 @@ for idx, name in enumerate(names):
                 bs.inputs["Emission Strength"].default_value = 0.16
                 bs.inputs["Roughness"].default_value = 0.54
                 bs.inputs["Metallic"].default_value = 0.12
+            if name in ("FootTown glazing", "FootTown frame"):
+                bs.inputs["Roughness"].default_value = (
+                    0.24 if name == "FootTown glazing" else 0.45
+                )
+                bs.inputs["Metallic"].default_value = (
+                    0.27 if name == "FootTown glazing" else 0.58
+                )
             if name == "Hall handrail":
                 bs.inputs["Roughness"].default_value = 0.37
                 bs.inputs["Metallic"].default_value = 0.74
@@ -384,7 +449,15 @@ groups = {
 native_finishes = {}
 for group, fid, label, arr in blocks:
     ob = make(
-        ("原型 · " if group == "Prototype" else "地物 · " if group == "Terrain" else "")
+        (
+            "原型 · "
+            if group == "Prototype"
+            else "地物 · "
+            if group == "Terrain"
+            else "測量橋梁 · "
+            if group == "Bridge"
+            else ""
+        )
         + (label or fid),
         arr,
         coll(groups["Backdrop"] if fid == "skyline-viaduct" else groups[group]),

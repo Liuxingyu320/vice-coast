@@ -18,12 +18,12 @@ def build(cache):
     region = Polygon(layout["boundary"])
     grid = layout["height"]
     grid["gradeCm"] = np.asarray(grid["gradeCm"])
-    transition = region.buffer(48)
+    transition = region.buffer(126)
     sh.prepare(transition)
 
     def stitch_grade(xy, z):
         d = sh.distance(region, sh.points(xy))
-        t = np.clip((d - 6) / 42, 0, 1)
+        t = np.clip((d - 78) / 48, 0, 1)
         return sample(grid, xy) * (1 - t * t * (3 - 2 * t)) + z * t * t * (3 - 2 * t)
 
     # Subdivide the near ring at every formation breakline, including diagonal creases.
@@ -129,9 +129,13 @@ def build(cache):
             sf.extend([(j, j + 1, j + 2), (j, j + 2, j + 3)])
         return labels, (np.float32(sv), np.int32(sf))
 
+    from context_streets import split_backdrop
+
+    background, streets = split_backdrop(cache, clipped.pack(), region, layout)
+    pickle.dump(streets, open(cache / "edge-streets.pkl", "wb"), protocol=4)
     results = [classify(far[0][3]), classify(detail)]
     pickle.dump(
-        (clipped.pack(), results), open(cache / "horizon-grade.pkl", "wb"), protocol=4
+        (background, results), open(cache / "horizon-grade.pkl", "wb"), protocol=4
     )
 
 

@@ -1,0 +1,430 @@
+{
+  "chrome": "158.0.8127.37",
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+  "viewport": [
+    1440,
+    900
+  ],
+  "dpr": 1,
+  "streetBases": {
+    "bases": 758,
+    "maximumPositionErrorM": 0.000032
+  },
+  "grassDrive": {
+    "daimon": {
+      "pace": {
+        "fps": 60,
+        "p95ms": 16.7,
+        "p99ms": 16.8,
+        "frames": 361,
+        "sceneFrames": 361,
+        "peakDrawCalls": 143,
+        "eye": [
+          845.9459858228588,
+          5.443844543674442,
+          71.20682208955637
+        ],
+        "fov": 65.96613653519829,
+        "direction": [
+          0.11751819585895236,
+          0.0060620018223391785,
+          -0.9930522271139434
+        ]
+      },
+      "start": [
+        832.94,
+        -181.11,
+        2.947
+      ],
+      "exit": [
+        844.61,
+        -82.51,
+        0.118
+      ],
+      "distanceM": 99.29
+    },
+    "start": [
+      438.94,
+      -162.97,
+      0.44
+    ],
+    "lawn": [
+      453.43,
+      -132.16,
+      0.44
+    ],
+    "back": [
+      439.12,
+      -162.58,
+      0.44
+    ],
+    "tyreContacts": {
+      "onRoad": [
+        [
+          438.67727271095737,
+          -161.42087495133754,
+          2.988525260648976
+        ],
+        [
+          440.30070797912623,
+          -162.18434254954113,
+          2.991903211927064
+        ],
+        [
+          437.5920669758041,
+          -163.72839246948868,
+          3.0023703438517284
+        ],
+        [
+          439.21550272956426,
+          -164.49185276557174,
+          3.006951127532546
+        ]
+      ],
+      "onGrass": [
+        [
+          453.1669482334988,
+          -130.61075390035194,
+          3.2106734555400975
+        ],
+        [
+          454.79019506900494,
+          -131.37435587030797,
+          3.231146172622459
+        ],
+        [
+          452.0818612112051,
+          -132.91819457079063,
+          3.181636222269666
+        ],
+        [
+          453.70507200838256,
+          -133.68180369292432,
+          3.2045534608257715
+        ]
+      ]
+    },
+    "outwardM": 34.05,
+    "returnErrorM": 0.43,
+    "parkCoverage": [
+      255,
+      255,
+      246,
+      255
+    ],
+    "maximumTyreGapM": 7.788264522190502e-7
+  },
+  "scenePeak": 216,
+  "peakFrame": {
+    "calls": 216,
+    "eye": [
+      749.8682944858259,
+      889.1107533928919,
+      763.1283081150768
+    ],
+    "mode": "overview",
+    "pin": "qa-12-full-overview-night",
+    "period": "night"
+  },
+  "freeWalkAndOverview": true,
+  "walk": {
+    "fps": 60,
+    "p95ms": 16.7,
+    "p99ms": 16.8,
+    "frames": 361,
+    "sceneFrames": 361,
+    "peakDrawCalls": 200,
+    "eye": [
+      422.08658838045255,
+      4.902607961227006,
+      152.3709455150404
+    ],
+    "fov": 55,
+    "direction": [
+      -0.8393695155980155,
+      0.1296341426196917,
+      -0.5278766952158529
+    ],
+    "travelledM": 19.91
+  },
+  "sample": "requestAnimationFrame, real time, 6 seconds per settled camera",
+  "views": [
+    {
+      "file": "qa-01-daimon-cross-day.png",
+      "pin": "大门路口",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 117,
+      "eye": [
+        814,
+        3.8172,
+        200.8
+      ],
+      "fov": 65,
+      "direction": [
+        0.9658794721616863,
+        0.06053304634819022,
+        -0.2518185766707255
+      ]
+    },
+    {
+      "file": "qa-02-daimon-cross-night.png",
+      "pin": "大门路口",
+      "time": "night",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 212,
+      "eye": [
+        815.5,
+        3.8271999999999995,
+        200.1
+      ],
+      "fov": 66,
+      "direction": [
+        -0.9526931741502181,
+        0.08897191930225512,
+        -0.2906195339326924
+      ]
+    },
+    {
+      "file": "qa-03-shibakoen-curve-dusk.png",
+      "pin": "芝公园站",
+      "time": "dusk",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 148,
+      "eye": [
+        66,
+        7.547599999999999,
+        217.6
+      ],
+      "fov": 63,
+      "direction": [
+        -0.42295994357090555,
+        0.08326671422432558,
+        -0.9023145462845985
+      ]
+    },
+    {
+      "file": "qa-04-slope-grounding-day.png",
+      "pin": "东京塔",
+      "time": "day",
+      "eyeAboveDEM": 1,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 154,
+      "eye": [
+        190.09,
+        12.68174,
+        -32.19
+      ],
+      "fov": 64,
+      "direction": [
+        -0.8615108229519878,
+        0.1058115869272817,
+        0.4965913913959036
+      ]
+    },
+    {
+      "file": "qa-05-shopfront-closeup-dusk.png",
+      "pin": "大门路口",
+      "time": "dusk",
+      "eyeAboveDEM": 1.5,
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 171,
+      "eye": [
+        800.2,
+        4.2814000000000005,
+        202.1
+      ],
+      "fov": 68,
+      "direction": [
+        -0.7169789580777729,
+        0.18474755302269014,
+        0.672167773197912
+      ]
+    },
+    {
+      "file": "qa-06-sangedatsumon-axis-dusk.png",
+      "pin": "三解脱门",
+      "time": "dusk",
+      "eyeAboveDEM": 1.55,
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 206,
+      "eye": [
+        456,
+        4.44,
+        151
+      ],
+      "fov": 62,
+      "direction": [
+        -0.9473726956973185,
+        0.263935768385347,
+        -0.18117087407757482
+      ]
+    },
+    {
+      "file": "qa-07-zojoji-mainhall-day.png",
+      "pin": "增上寺大殿",
+      "time": "day",
+      "eyeAboveDEM": 1.35,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 181,
+      "eye": [
+        313.4,
+        8.645199999999996,
+        136.2
+      ],
+      "fov": 61,
+      "direction": [
+        -0.966057857074082,
+        0.22604726134408987,
+        -0.12503940348653886
+      ]
+    },
+    {
+      "file": "qa-08-tower-foottown-night.png",
+      "pin": "东京塔",
+      "time": "night",
+      "eyeAboveDEM": 1.4,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 148,
+      "eye": [
+        32,
+        21.479999999999997,
+        -40
+      ],
+      "fov": 76,
+      "direction": [
+        -0.5643985038125015,
+        0.478132363268237,
+        0.672936677622598
+      ]
+    },
+    {
+      "file": "qa-09-metro-station-dusk.png",
+      "pin": "大门路口",
+      "time": "dusk",
+      "eyeAboveDEM": 1.98,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 135,
+      "eye": [
+        762.85,
+        4.7485,
+        182.15
+      ],
+      "fov": 72,
+      "direction": [
+        0.9697713005973322,
+        -0.24332057435571222,
+        -0.01840441884345223
+      ]
+    },
+    {
+      "file": "qa-10-underpass-bridge-day.png",
+      "pin": "芝公园站",
+      "time": "day",
+      "eyeAboveDEM": 1.25,
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 165,
+      "eye": [
+        -33.5,
+        3.981400000000002,
+        419.2
+      ],
+      "fov": 68,
+      "direction": [
+        0.9677472776497721,
+        0.07214116069752839,
+        0.24137286412243686
+      ]
+    },
+    {
+      "file": "qa-11-rooftop-oblique-dusk.png",
+      "pin": "大门路口",
+      "time": "dusk",
+      "eyeAboveDEM": 64,
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 163,
+      "eye": [
+        583,
+        66.78,
+        119
+      ],
+      "fov": 56,
+      "direction": [
+        -0.455936334699806,
+        -0.578274348636354,
+        -0.6765506901997123
+      ]
+    },
+    {
+      "file": "qa-12-full-overview-night.png",
+      "pin": "overview",
+      "time": "night",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 210,
+      "eye": [
+        749.8682944858259,
+        889.1107533928919,
+        763.1283081150768
+      ],
+      "fov": 55,
+      "direction": [
+        -0.3746668963943103,
+        -0.7643289370255051,
+        -0.5248104350827227
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}

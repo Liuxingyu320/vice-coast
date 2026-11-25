@@ -7,8 +7,10 @@ import compressedPavement from '../assets/shiba-pavement.glb';
 import { gunzipSync } from 'three/addons/libs/fflate.module.js';
 import vehicleBytes from '../assets/solano-gt.glb';
 import data from '../assets/shiba-layout.json';
-import gateSupports from '../assets/shiba-gate-supports.json';
+import physical from '../assets/shiba-solids.json';
+import { createCollision } from './shiba/collision.js';
 import { furnishAvenue } from './shiba/avenue.js';
+import { installAir } from './shiba/air.js';
 import { createLighting } from './shiba/lighting.js';
 import { createTrees, makeStreets } from './shiba/street.js';
 import { finishPavement } from './shiba/pavement.js';
@@ -19,40 +21,9 @@ import { createDriving, batchCar } from './shiba/driving.js';
 
 const byId = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-const boundsOf = (ring) => [
-  Math.min(...ring.map((p) => p[0])),
-  Math.min(...ring.map((p) => p[1])),
-  Math.max(...ring.map((p) => p[0])),
-  Math.max(...ring.map((p) => p[1])),
-];
-const bounds = boundsOf(data.boundary);
-function inside(x, y, ring) {
-  let hit = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [ax, ay] = ring[i],
-      [bx, by] = ring[j];
-    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) hit = !hit;
-  }
-  return hit;
-}
 const terrain = (x, y) => surveyHeight(data.height, x, y);
-const footprints = data.footprints.flatMap((f) =>
-  (gateSupports[f.id] || [null]).map((support) => {
-    const rings = support ? [support] : f.rings;
-    return { id: f.id, rings, box: boundsOf(rings[0]) };
-  }),
-);
-function passable(x, y) {
-  if (!inside(x, y, data.boundary)) return false;
-  for (const f of footprints) {
-    const [a, b, c, d] = f.box;
-    if (x < a || x > c || y < b || y > d) continue;
-    if (inside(x, y, f.rings[0]) && !f.rings.slice(1).some((h) => inside(x, y, h))) {
-      return false;
-    }
-  }
-  return true;
-}
+const { passable, contact, sidewalkLift } = createCollision(data.boundary, physical);
+const rideHeight = (x, y) => terrain(x, y) + sidewalkLift(x, y);
 let instance, loading;
 async function create() {
   const canvas = byId('shibaCanvas'),
@@ -93,23 +64,11 @@ async function create() {
   createTrees(scene, district, data.trees);
   const furniture = buildFurniture(scene, streets, terrain, data, lighting.texture, passable);
   const avenue = await furnishAvenue(scene, streets, terrain, passable, data.fixtures);
+  installAir(scene, lighting.air);
   canvas.dataset.avenue = JSON.stringify(avenue.inventory);
-  const driving = createDriving(car, terrain, passable, footprints, data.boundary, streets);
+  const driving = createDriving(car, rideHeight, contact);
   const hud = createHud(data);
   let dark = 0.7;
-  const skyline = [
-    'surveyed-skyline',
-    'skyline-photofacades',
-    'skyline-ground',
-    'skyline-viaduct',
-    'surveyed-skyline-foundations',
-    'skyline-photofacades-foundations',
-  ]
-    .map((name) => district.getObjectByName(name))
-    .filter(Boolean);
-  function showSkyline(visible) {
-    for (const object of skyline) object.visible = visible;
-  }
   const state = {
     mode: 'overview',
     x: data.startWalk[0],
@@ -155,6 +114,16 @@ async function create() {
     if (state.mode !== 'overview') hud.place(locationLabel()[0]);
   }
   function walkHeight(x, y, ground) {
+    for (const station of data.stations) {
+      const [a, b] = station.down,
+        dx = x - station.mouth[0],
+        dy = y - station.mouth[1],
+        depth = dx * a + dy * b;
+      const width = Math.min(2.38, station.width - 0.42);
+      if (depth < 0.08 || depth > station.length - 0.54 || Math.abs(dy * a - dx * b) > width / 2) continue;
+      const count = Math.min(17, Math.floor((station.length - 0.62) / 0.37) - 2);
+      return terrain(...station.mouth) - Math.min(count, Math.floor((depth - 0.08) / 0.32)) * 0.155 - 0.015;
+    }
     const dx = x - steps.center[0],
       dy = y - steps.center[1];
     const cross = dx * steps.along[0] + dy * steps.along[1],
@@ -173,7 +142,6 @@ async function create() {
   }
   function walk() {
     state.mode = 'walk';
-    showSkyline(true);
     state.speed = 0;
     car.visible = false;
     turnToTower();
@@ -205,10 +173,9 @@ async function create() {
   }
   function overview() {
     state.mode = 'overview';
-    showSkyline(false);
     state.speed = 0;
     car.visible = false;
-    state.tilt = 0.71;
+    state.tilt = 0.87;
     state.angle = 0.62;
     frameDistrict();
     state.focusX = overviewTarget.x;
@@ -232,19 +199,29 @@ async function create() {
       walk();
       return;
     }
-    const previousHeading = state.heading;
-    let spot = streets.nearest(state.x, state.y);
-    if (!passable(spot.x, spot.y)) {
+    const nearestRoad = streets.nearest(state.x, state.y);
+    const onRoad = nearestRoad.distance <= nearestRoad.width / 2;
+    let heading = state.mode === 'overview' && onRoad ? nearestRoad.heading : state.heading;
+    if (
+      state.mode === 'overview' &&
+      onRoad &&
+      nearestRoad.road?.oneway === 'no' &&
+      Math.cos(state.heading - heading) < 0
+    )
+      heading += Math.PI;
+    if (contact(state.x, state.y, heading)) {
       const q = data.vehicleArrivals[data.pins.indexOf(nearest())];
-      spot = { x: q[0], y: q[1], heading: Math.atan2(q[2], q[3]) };
+      const choices = [
+        [nearestRoad.x, nearestRoad.y, nearestRoad.heading],
+        [q[0], q[1], Math.atan2(q[2], q[3])],
+      ];
+      const spot = choices.find(([x, y, h]) => !contact(x, y, h));
+      if (!spot) return;
+      [state.x, state.y, heading] = spot;
     }
-    state.x = spot.x;
-    state.y = spot.y;
-    state.heading = spot.heading;
-    if (spot.road?.oneway === 'no' && Math.cos(previousHeading - state.heading) < 0) state.heading += Math.PI;
+    state.heading = heading;
     driving.reset();
     state.mode = 'drive';
-    showSkyline(true);
     state.speed = 0;
     state.pitch = 0.05;
     car.visible = true;
@@ -288,7 +265,10 @@ async function create() {
         state.range = clamp(state.range - forward * dt * 380, 260, 4000);
       } else {
         if (state.mode === 'drive') {
+          const previousHeading = state.heading;
           driving.steer(state, forward, side, dt);
+          if (state.heading !== previousHeading && contact(state.x, state.y, state.heading))
+            state.heading = previousHeading;
         } else {
           state.heading += side * dt * 1.45;
           state.speed = forward * (has('ShiftLeft', 'ShiftRight') ? 7.2 : 3.3);
@@ -310,7 +290,7 @@ async function create() {
       );
       camera.lookAt(overviewTarget);
     } else if (state.mode === 'walk') {
-      const walkZ = walkHeight(state.x, state.y, ground) + 1.69;
+      const walkZ = walkHeight(state.x, state.y, rideHeight(state.x, state.y)) + 1.69;
       camera.position.set(state.x, walkZ, -state.y);
       camera.lookAt(
         state.x + Math.sin(state.heading) * Math.cos(state.pitch),
@@ -318,11 +298,11 @@ async function create() {
         -state.y - Math.cos(state.heading) * Math.cos(state.pitch),
       );
     } else {
-      driving.cameraMove(camera, state, ground, dt, now / 1000, !!drag, dark);
+      driving.cameraMove(camera, state, rideHeight(state.x, state.y), dt, now / 1000, !!drag, dark);
     }
     dark = lighting.update(dt, now / 1000, camera, state, ground);
     furniture(now / 1000, dark);
-    avenue.update(dark);
+    avenue.update(dark, now / 1000);
     hud.draw(state, now);
     renderer.render(scene, camera);
     canvas.dataset.drawCalls = renderer.info.render.calls;
@@ -490,6 +470,25 @@ async function create() {
     stick.clear();
     state.speed = 0;
   });
+  // PLATEAU façade atlases can take tens of milliseconds to upload on their first visible frame.
+  // Upload the surveyed districts while the map is loading, before the player can turn a corner.
+  const atlasTextures = new Set();
+  scene.traverse((object) => {
+    if (!object.material) return;
+    for (const material of [].concat(object.material)) {
+      for (const value of Object.values(material)) {
+        if (value?.isTexture && value.image && !value.isRenderTargetTexture) atlasTextures.add(value);
+      }
+    }
+  });
+  for (const texture of atlasTextures) renderer.initTexture(texture);
+  // Warm the actual map programs for daylight and for the additional vehicle spotlight.
+  // Looking around or driving into another street can then reuse its compiled material variants.
+  lighting.update(0, 0, camera, state, terrain(state.x, state.y));
+  await renderer.compileAsync(scene, camera);
+  car.visible = true;
+  await renderer.compileAsync(scene, camera);
+  car.visible = false;
   return {
     open(back) {
       closeCallback = back;

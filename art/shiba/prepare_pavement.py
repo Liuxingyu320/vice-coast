@@ -175,6 +175,46 @@ def markings(roads, paved, road, data):
                             0.075,
                             white,
                         )
+    # Through arrows are allowed only on multi-lane approaches that continue straight.
+    # Fit the entire painted outline on an incoming lane with a clear setback.
+    arrows = []
+    for q, d, width in sites:
+        if width < 8:
+            continue
+        i = int(belts.nearest(Point(q)))
+        line, info = roads[i]
+        station = line.project(Point(q))
+        for sign in [1, -1] if info[2] == "no" else [-1] if info[2] == "-1" else [1]:
+            s0 = station - sign * 13.8
+            if s0 < 2 or s0 > line.length - 2:
+                continue
+            o, t, n = frame(line, s0)
+            _, t2, _ = frame(line, max(0, min(line.length, s0 + sign * 4)))
+            if t @ t2 < 0.98:
+                continue
+            t = t * sign
+            n = n * sign
+            o = o + n * (width * 0.25 if info[2] == "no" else 0)
+            shape = Polygon(
+                [
+                    o + t * v + n * u
+                    for u, v in [
+                        (-0.14, -1.54),
+                        (0.14, -1.54),
+                        (0.14, 0.28),
+                        (0.53, 0.20),
+                        (0, 1.57),
+                        (-0.53, 0.20),
+                        (-0.14, 0.28),
+                    ]
+                ]
+            )
+            if paved[i].covers(shape) and all(shape.distance(p) > 0.30 for p in arrows):
+                arrows.append(shape)
+    white.extend(arrows)
+    data["arrows"] = [
+        np.asarray(p.exterior.coords)[:-1].round(5).tolist() for p in arrows
+    ]
     reserved = unary_union(clearance)
     z = unary_union(zebra).intersection(road)
     crossing_space = unary_union(crossing_bands).buffer(0.90)
@@ -312,8 +352,8 @@ def partition(surfaces, region, grid):
     verts = {k: {} for k in surfaces}
     packed = {k: [[], []] for k in surfaces}
     sides = defaultdict(list)
-    motor = {"asphalt", "white", "yellow", "stop", "zebra"}
-    raised = {"curb", "sidewalk", "tactile"}
+    motor = {"asphalt", "white", "yellow", "stop", "zebra", "inlet", "manhole"}
+    raised = {"curb", "sidewalk", "tactile", "tactileWarn"}
     for patch, i in zip(patches, owner):
         k = labels[i]
         xy, faces = packed[k]
@@ -368,7 +408,7 @@ def partition(surfaces, region, grid):
     return packed, walls
 
 
-def plant_and_furnish(cache, data, roads, road, walk, buildings, signals):
+def plant_and_furnish(cache, data, roads, road, walk, buildings, signals, water):
     grid = data["height"]
     raw_trees = json.loads((cache / "trees.json").read_text())
     trees = []
@@ -393,6 +433,45 @@ def plant_and_furnish(cache, data, roads, road, walk, buildings, signals):
                 round(r, 2),
             ]
         )
+    # A laser return can be the crown overhanging a pond. Replace a wet trunk position only
+    # with a separately mapped, previously unrepresented tree on solid ground.
+    from xml.etree.ElementTree import parse
+    from shiba_site import en
+
+    area = Polygon(data["boundary"])
+    recorded = []
+    for node in parse(cache / "streets.osm").iterfind("node"):
+        tags = {a.get("k"): a.get("v") for a in node.iterfind("tag")}
+        if tags.get("natural") != "tree":
+            continue
+        p = Point(en(float(node.get("lat")), float(node.get("lon"))))
+        if (
+            area.covers(p)
+            and water.distance(p) > 0.6
+            and road.distance(p) > 1.5
+            and buildings.distance(p) > 3.3
+            and not walk.intersects(p.buffer(1.22))
+        ):
+            recorded.append((p, node.get("id")))
+    changes = []
+    for row in trees:
+        pt = Point(row[:2])
+        if water.distance(pt) > 0.25:
+            continue
+        nearby = [
+            (p, id)
+            for p, id in recorded
+            if all(p.distance(Point(t[:2])) > 3.8 for t in trees)
+        ]
+        if not nearby:
+            raise ValueError("No mapped bank tree with adequate clearance")
+        p, id = min(nearby, key=lambda item: item[0].distance(pt))
+        recorded.remove((p, id))
+        x, y = np.round(p.coords[0], 3)
+        changes.append({"source": id, "replacedLaserCenter": row[:2], "xy": [x, y]})
+        row[:3] = [x, y, round(float(sample(grid, [x, y])), 4)]
+        row[4] = round(min(row[4], (buildings.distance(p) - 0.36) / 1.65), 3)
+    data["mappedBankTrees"] = changes
     data["trees"] = trees
     # Inset each mast base 0.32 m from the actual outside edge, with a clear strip back to the curb.
     kerbside = road.buffer(WALK_WIDTH - 0.32, quad_segs=12).boundary.intersection(
@@ -508,6 +587,9 @@ def plant_and_furnish(cache, data, roads, road, walk, buildings, signals):
     )
 
 
+from station_sites import station_sites
+
+
 def main(cache):
     path = ROOT / "assets/shiba-layout.json"
     data = json.loads(path.read_text())
@@ -515,13 +597,34 @@ def main(cache):
     buildings = unary_union(
         [Polygon(f["rings"][0], f["rings"][1:]).buffer(0) for f in data["footprints"]]
     )
+    base_count = len(json.loads((cache / "layout.json").read_text())["roads"])
+    data["roads"] = data["roads"][:base_count]
+    data["roadInfo"] = data["roadInfo"][:base_count]
     roads = [
         (LineString(pts), info)
         for (kind, pts), info in zip(data["roads"], data["roadInfo"])
         if kind == "road"
     ]
     paved = [line.buffer(info[0] / 2, quad_segs=12) for line, info in roads]
-    road = unary_union(list(parts(unary_union(paved).intersection(region), "Polygon")))
+    # The survey cut follows several road centrelines. Include the carriageway and
+    # both pavements at that seam, with room for a complete vehicle at junctions.
+    survey = Polygon(json.loads((cache / "layout.json").read_text())["boundary"])
+    full_road = unary_union(paved)
+    region = survey.union(full_road.buffer(WALK_WIDTH + 1.2, quad_segs=6))
+    region = Polygon(np.round(np.asarray(region.exterior.coords)[:-1], 4))
+    from context_streets import connections
+
+    connections(cache, data, survey, region)
+    for (kind, p), info in zip(
+        data["roads"][base_count:], data["roadInfo"][base_count:]
+    ):
+        line = LineString(p)
+        roads.append((line, info))
+        paved.append(line.buffer(info[0] / 2, quad_segs=12))
+    full_road = unary_union(paved)
+    data["boundary"] = np.asarray(region.exterior.coords)[:-1].tolist()
+    data["areaM2"] = round(region.area, 2)
+    road = unary_union(list(parts(full_road.intersection(region), "Polygon")))
     outer = road.buffer(WALK_WIDTH, quad_segs=12)
     walk = unary_union(
         list(
@@ -533,13 +636,64 @@ def main(cache):
     )
     grade_grid(data["height"], road, roads)
     markings_geom, signals = markings(roads, paved, road, data)
-    plant_and_furnish(cache, data, roads, road, walk, buildings, signals)
+    from waterways import water_plan
+
+    hydrology = water_plan(cache, data, region)
+    plant_and_furnish(cache, data, roads, road, walk, buildings, signals, hydrology)
     curb = road.buffer(0.19, quad_segs=12).intersection(walk)
     tactile = (
         road.buffer(0.82, quad_segs=12)
         .difference(road.buffer(0.52, quad_segs=12))
         .intersection(walk)
     )
+    data["stations"] = station_sites(cache, data)
+    wells = unary_union([Polygon(s["well"]) for s in data["stations"]])
+    # Each marked approach receives a warning pad behind the kerb and a short
+    # link to the longitudinal guide. Ray cast to the final union at junctions.
+    warnings = []
+    guides = []
+    vectors = []
+    for ring in data["crosswalkBands"]:
+        r = np.asarray(ring)
+        center = r.mean(0)
+        along = r[1] - r[0]
+        across = r[3] - r[0]
+        for side in (-1, 1):
+            direction = side * across / np.linalg.norm(across)
+            tx = np.array([-direction[1], direction[0]])
+            candidates = list(
+                parts(
+                    LineString([center, center + direction * 35]).intersection(
+                        road.boundary
+                    ),
+                    "Point",
+                )
+            )
+            if not candidates:
+                continue
+            edge = np.array(
+                min(candidates, key=lambda p: p.distance(Point(center))).coords[0]
+            )
+            warning = rectangle(
+                edge, tx, direction, -0.90, 0.90, 0.2, 0.80
+            ).intersection(walk)
+            if warning.area < 0.18:
+                continue
+            warnings.append(warning)
+            guides.append(
+                rectangle(edge, tx, direction, -0.15, 0.15, 0.2, 1.0).intersection(walk)
+            )
+            vectors.append([*np.round(edge, 4), *np.round(direction, 6)])
+    data["tactileApproaches"] = vectors
+    mast_space = unary_union(
+        [
+            Point(q[:2]).buffer(0.24)
+            for kind in ("signals", "lamps", "gantries")
+            for q in data["fixtures"][kind]
+        ]
+    )
+    warning = unary_union(warnings).difference(mast_space)
+    tactile = unary_union([tactile, *guides]).difference(warning).difference(mast_space)
     # Mapped pedestrian links and shop thresholds cover the orthophoto at human eye level.
     paths = unary_union(
         [
@@ -602,16 +756,72 @@ def main(cache):
         .intersection(region)
         .difference(unary_union([road, walk, buildings]))
     )
+    # The paved apron on the public northeast side of FootTown follows the aerial outline.
+    entry_plaza = Polygon(
+        [(-16, 46), (6, 50), (32, 38), (59, 17), (64, 8), (50, 8), (24, 24), (-12, 39)]
+    )
+    forecourt = forecourt.union(
+        entry_plaza.intersection(region).difference(
+            unary_union([road, walk, buildings])
+        )
+    )
+    warning = warning.difference(curb)
+    tactile = tactile.difference(curb)
     ground = region.difference(unary_union([road, walk, forecourt]))
+    from ironwork import plan, shapes
+
+    data["drains"] = plan(roads, road, data, markings_geom, frame)
+    iron = {kind: shapes(data["drains"], kind) for kind in ["inlet", "manhole"]}
     surfaces = {
-        "asphalt": road.difference(unary_union(list(markings_geom.values()))),
+        "asphalt": road.difference(
+            unary_union([*markings_geom.values(), *iron.values()])
+        ),
+        **iron,
         **markings_geom,
-        "sidewalk": walk.difference(curb.union(tactile)),
+        "sidewalk": walk.difference(unary_union([curb, tactile, warning])),
+        "tactileWarn": warning,
         "curb": curb,
         "tactile": tactile,
         "forecourt": forecourt,
         "ground": ground,
     }
+    wet = hydrology.intersection(ground).difference(buildings)
+    water_parts = [q for q in parts(wet, "Polygon") if q.area > 3]
+    water = unary_union(water_parts)
+    data["waters"] = []
+    bodies = list(parts(hydrology, "Polygon"))
+    for q in water_parts:
+        whole = max(bodies, key=lambda body: body.intersection(q).area)
+        xx, yy = whole.bounds[:2]
+        X, Y = whole.bounds[2:]
+        gridpts = np.array(
+            [
+                (x, y)
+                for x in np.arange(xx, X, 2.0)
+                for y in np.arange(yy, Y, 2.0)
+                if whole.covers(Point(x, y))
+            ]
+        )
+        if len(gridpts) == 0:
+            gridpts = np.asarray(q.representative_point().coords)
+        # Fix the stage from low DEM samples under the watercourse; never tilt water up the bank.
+        stage = round(
+            float(np.quantile(sample(data["height"], gridpts, raw=True), 0.12)) - 0.18,
+            3,
+        )
+        data["waters"].append(
+            {
+                "rings": [
+                    np.round(np.asarray(r.coords)[:-1], 5).tolist()
+                    for r in [q.exterior, *q.interiors]
+                ],
+                "z": stage,
+            }
+        )
+    surfaces["ground"] = ground.difference(water)
+    surfaces["water"] = water
+    region = region.difference(wells)
+    surfaces = {k: s.difference(wells) for k, s in surfaces.items()}
     assert abs(sum(s.area for s in surfaces.values()) - region.area) < 0.002
     packed, walls = partition(surfaces, region, data["height"])
     payload = {

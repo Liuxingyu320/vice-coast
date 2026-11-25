@@ -2,6 +2,9 @@
 
 import json, pickle, sys, math
 from pathlib import Path
+import xml.etree.ElementTree as ET
+from station_sites import DAIMON_A6, SHIBA_A3, BASIN, TOWER, bounds_rect
+from shiba_site import en
 from shapely import Polygon, LineString, Point, union_all, STRtree
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +43,22 @@ def main(cache):
     )
     surfaces, _, _ = pickle.load(open(cache / "surfaces.pkl", "rb"))
     ids = {f["id"] for f in d["footprints"]} - set(d["verifiedBuildings"].values())
+    exempt = set(d.get("templePrecinctIds", [])) | {DAIMON_A6, SHIBA_A3, BASIN, TOWER}
+    entrances = []
+    for node in ET.parse(cache / "streets.osm").iterfind("node"):
+        tags = {t.get("k"): t.get("v") for t in node.iterfind("tag")}
+        if tags.get("entrance") or tags.get("railway") == "subway_entrance":
+            entrances.append(
+                Point(en(float(node.get("lat")), float(node.get("lon")))).buffer(1.15)
+            )
+    for station in d["stations"]:
+        entrances.append(
+            bounds_rect(
+                station["mouth"], station["down"], -2.3, 2.3, -3, station["length"]
+            )
+        )
+    public_access = union_all(entrances)
+    tactile = carriageways.buffer(0.86).difference(carriageways.buffer(0.5))
     polygons = {}
     for fid, _, _, ss in surfaces:
         if fid not in ids:
@@ -54,10 +73,15 @@ def main(cache):
     index = STRtree(obs)
     out = []
     for idx, (fid, mp) in enumerate(polygons.items()):
+        if fid in exempt:
+            continue
         for poly in getattr(mp, "geoms", [mp]):
             if poly.is_empty or poly.geom_type != "Polygon":
                 continue
-            if poly.distance(AXIS) > 54 or poly.area < 18:
+            if (
+                poly.distance(AXIS) > (129 if poly.centroid.x > 570 else 54)
+                or poly.area < 18
+            ):
                 continue
             ring = list(poly.exterior.simplify(0.16).coords)
             for a, b in zip(ring, ring[1:]):
@@ -95,7 +119,9 @@ def main(cache):
                     t = (j + 0.5) / count
                     x = a[0] + dx * t
                     y = a[1] + dy * t
-                    if AXIS.distance(Point(x, y)) > 54:
+                    if AXIS.distance(Point(x, y)) > (
+                        129 if poly.centroid.x > 570 else 54
+                    ):
                         continue
                     # The largest awning, projecting sign and shop jamb must fit the actual bay and clear its neighbours.
                     width = length / count - 0.18
@@ -115,8 +141,14 @@ def main(cache):
 
                     while width > 2.30:
                         panel = envelope(width)
-                        if not carriageways.intersects(panel) and not any(
-                            k != idx for k in index.query(panel, predicate="intersects")
+                        if (
+                            not carriageways.intersects(panel)
+                            and not public_access.intersects(panel)
+                            and not tactile.intersects(panel)
+                            and not any(
+                                k != idx
+                                for k in index.query(panel, predicate="intersects")
+                            )
                         ):
                             break
                         width -= 0.32
@@ -130,6 +162,8 @@ def main(cache):
                             round(ny, 5),
                             round(width, 2),
                             idx % 7,
+                            fid,
+                            int(j == count // 2 and poly.area > 195 and idx % 3 != 1),
                         ]
                     )
     (ROOT / "assets/shiba-frontages.json").write_text(

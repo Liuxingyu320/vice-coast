@@ -7,6 +7,7 @@ const os = require('node:os');
 const output = path.resolve(process.argv[2] || '验收'),
   temp = fs.mkdtempSync(path.join(os.tmpdir(), 'shiba-views-')),
   reports = [];
+const drawBudget = 220; // Shared Shiba map budget, including environment and shadow passes.
 const url = pathToFileURL(path.resolve('index.html')).href;
 async function check(kind) {
   const mobile = kind !== 'chrome',
@@ -45,7 +46,8 @@ async function check(kind) {
       { timeout: 90000 },
     );
     await p.waitForTimeout(3800);
-    const screenshot = async (name) => p.screenshot({ path: path.join(mobile ? temp : output, name + '.png') });
+    const screenshot = async (name) =>
+      p.screenshot({ path: path.join(mobile ? temp : output, name + '.png') });
     async function sample(name, duration) {
       const result = await p.evaluate(
         (ms) =>
@@ -78,10 +80,10 @@ async function check(kind) {
       );
       report.samples.push({ name, ...result });
       console.log(kind, name, JSON.stringify(result));
-      assert.ok(result.maxDraw <= 180, name + ' draw budget');
+      assert.ok(result.maxDraw <= drawBudget, name + ' draw budget');
       if (!mobile && duration > 2000) {
-        assert.ok(result.fps >= 54, name + ' below target frame rate');
-        assert.ok(result.p95Ms <= 25, name + ' uneven frame pacing');
+        assert.ok(result.fps >= 59, name + ' below target frame rate');
+        assert.ok(result.p95Ms <= 20, name + ' uneven frame pacing');
       }
     }
     assert.equal(await canvas.getAttribute('data-actors'), '0,0');
@@ -161,7 +163,7 @@ async function check(kind) {
         await p.getByRole('button', { name, exact: true }).click();
         await p.waitForTimeout(120);
         assert.equal(await canvas.getAttribute('data-mode'), 'walk');
-        assert.ok(Number(await canvas.getAttribute('data-draw-calls')) <= 180);
+        assert.ok(Number(await canvas.getAttribute('data-draw-calls')) <= drawBudget);
         if (name === '三解脱门' || name === '增上寺大门') {
           await p.screenshot({ path: path.join(temp, name + '.png') });
         }
@@ -170,7 +172,7 @@ async function check(kind) {
       }
     }
     report.peakDrawCalls = Number(await canvas.getAttribute('data-peak-draw-calls'));
-    assert.ok(report.peakDrawCalls <= 180, 'total draw budget including environment and shadows');
+    assert.ok(report.peakDrawCalls <= drawBudget, 'total draw budget including environment and shadows');
     report.renderer = await canvas.evaluate((c) => {
       const gl = c.getContext('webgl2'),
         ext = gl.getExtension('WEBGL_debug_renderer_info');

@@ -292,6 +292,17 @@ def make_gate(arr, large, names):
                 box(x, side * 5.45, 7.62, 0.16, 2.1, 0.27, red)
         roof(0, 0, 7.9, 25, 14, 3.7)
         box(0, 0, -1.24, 19.9, 10.9, 2.72, stone)
+        # Open timber leaves fold into the side reveals of each of the three bays.
+        for wallx in [-5.9, -2, 2, 5.9]:
+            for sign in [-1, 1]:
+                x = wallx + sign * 0.23
+                box(x, 1.84, 2.60, 0.20, 2.51, 4.69, timber)
+                for v in np.arange(0.79, 3.02, 0.27):
+                    box(x + sign * 0.109, v, 2.69, 0.025, 0.019, 4.41, red)
+                for level in [1.03, 2.61, 4.31]:
+                    box(x + sign * 0.122, 1.82, level, 0.042, 2.44, 0.13, timber)
+                    for v in [1.03, 2.03, 2.77]:
+                        box(x + sign * 0.153, v, level, 0.038, 0.079, 0.081, stone)
         box(0, 0, 11.4, 21.7, 11.2, 0.68, red)
         for side in [-1, 1]:
             box(0, side * 5.52, 12.47, 21.8, 0.12, 0.14, red)

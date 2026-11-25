@@ -66,10 +66,11 @@ function skyMaterial() {
       halo: { value: new T.Color() },
       sun: { value: new T.Vector3() },
       night: { value: 0 },
+      skyTime: { value: 0 },
     },
     vertexShader:
       'varying vec3 ray; void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: `uniform vec3 top,mid,edge,halo,sun;uniform float night;varying vec3 ray;
+    fragmentShader: `uniform vec3 top,mid,edge,halo,sun;uniform float night,skyTime;varying vec3 ray;
  float hash(vec2 p){return fract(sin(dot(p,vec2(37.31,91.17)))*42367.23);}
  float cloudnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
  void main(){vec3 d=normalize(ray);float h=max(0.,d.y);
@@ -77,7 +78,15 @@ function skyMaterial() {
  vec2 cloudUV=d.xz/(.29+h)*vec2(3.1,9.8)+vec2(2.6,8.1);
  float layers=.57*cloudnoise(cloudUV)+.27*cloudnoise(cloudUV*2.12)+.16*cloudnoise(cloudUV*4.13);
  float cirrus=smoothstep(.48,.77,layers)*smoothstep(.0,.13,h)*(1.-smoothstep(.55,.96,h));
- sky=mix(sky,mix(mid,halo,.48),cirrus*(.052-.035*night));
+ vec2 wind=vec2(skyTime*.00055,skyTime*.00023);
+ vec2 low=d.xz/(.16+h)*vec2(3.6,4.2)+vec2(-5.6,9.7)+wind;
+ float bank=.50*cloudnoise(low)+.27*cloudnoise(low*2.08)+.15*cloudnoise(low*4.23)+.08*cloudnoise(low*8.46);
+ float bankAlpha=smoothstep(.47,.67,bank)*smoothstep(.005,.18,h)*(1.-.68*smoothstep(.42,.98,h));
+ float sunEdge=pow(max(0.,dot(d,sun)),4.);
+ vec3 cloudTone=mix(mix(mid,vec3(.71,.73,.72),.52),mix(halo,mid,.28),smoothstep(.14,.46,1.-sun.y)*(.38+.52*sunEdge));
+ cloudTone=mix(cloudTone,mix(mid,top,.48),.27*smoothstep(.53,.68,bank)+night*.68);
+ sky=mix(sky,cloudTone,bankAlpha*(.50-night*.20));
+ sky=mix(sky,mix(mid,halo,.48),cirrus*(.16-.10*night));
  float s=max(dot(d,sun),0.);sky+=halo*(pow(s,24.)*.33+pow(s,220.)*.79+smoothstep(.9994,.99983,s)*2.5)*(1.-night*.81);
  gl_FragColor=vec4(sky,1.);
  #include <tonemapping_fragment>
@@ -136,6 +145,12 @@ export function createLighting(renderer, scene, district, car, height) {
     }
     const mat = o.material,
       name = mat.name;
+    if (name === 'FootTown glazing') {
+      mat.roughness = 0.23;
+      mat.metalness = 0.23;
+      mat.envMapIntensity = 1.2;
+      finish(mat);
+    }
     if (name === 'International orange') {
       orange.push(mat);
       o.castShadow = true;
@@ -156,7 +171,9 @@ export function createLighting(renderer, scene, district, car, height) {
   });
   car.traverse((o) => {
     if (!o.isMesh) return;
-    o.castShadow = o.receiveShadow = true;
+    o.receiveShadow = true;
+    // The outer shell, glazing and tyres define the shadow silhouette. Interior trim and lamps sit inside it.
+    o.castShadow = /^(Paintwork|Blue glass|Black satin|Coal rubber)/.test(o.material.name);
     if (/Paintwork|glass/i.test(o.material.name)) {
       o.material.roughness = 0.19;
       o.material.metalness = 0.5;
@@ -327,6 +344,26 @@ export function createLighting(renderer, scene, district, car, height) {
   );
   const direction = new T.Vector3(),
     desired = new T.Vector3();
+  for (const mat of orange) {
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader =
+        'varying float towerAltitude,steelIrradiance;\n' +
+        sh.vertexShader.replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\ntowerAltitude=(modelMatrix*vec4(transformed,1.)).y;steelIrradiance=.18+.82*pow(max(0.,dot(normalize(mat3(modelMatrix)*normal),normalize(vec3(.41,-.83,.38)))),.67);',
+        );
+      sh.fragmentShader =
+        'varying float towerAltitude,steelIrradiance;\n' +
+        sh.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+        float tier=clamp((towerAltitude-18.391)/333.,0.,1.);
+        float uplight=.57+.57*exp(-.008*max(0.,towerAltitude-18.391))+.32*pow(.5+.5*cos((towerAltitude-20.)*.097),3.);
+        totalEmissiveRadiance*=mix(vec3(1.12,.74,.43),vec3(1.02,1.05,.81),sqrt(tier))*uplight*steelIrradiance;`,
+        );
+    };
+    mat.customProgramCacheKey = () => 'tower-directed-uplight';
+  }
   const uniforms = sky.material.uniforms,
     skyKeys = ['top', 'mid', 'edge', 'halo'];
   function sunVector(p, out) {
@@ -334,16 +371,17 @@ export function createLighting(renderer, scene, district, car, height) {
       .set(-0.82 * Math.cos(p.elevation), Math.sin(p.elevation), -0.573 * Math.cos(p.elevation))
       .normalize();
   }
+  // Generate reflection probes while loading. Interactive lighting transitions only blend the cached textures.
+  for (const period of Object.keys(params)) {
+    const p = params[period],
+      u = envSky.material.uniforms;
+    urbanLights.color.setScalar(period === 'night' ? 0.58 : period === 'dusk' ? 0.22 : 0.035);
+    skyKeys.forEach((k, i) => u[k].value.copy(p.sky[i]));
+    sunVector(p, u.sun.value);
+    u.night.value = period === 'night' ? 1 : 0;
+    cache.set(period, pmrem.fromScene(envScene, 0, 0.1, 60, { size: 64 }));
+  }
   function environment() {
-    if (!cache.has(name)) {
-      const p = params[name],
-        u = envSky.material.uniforms;
-      urbanLights.color.setScalar(name === 'night' ? 0.58 : name === 'dusk' ? 0.22 : 0.035);
-      skyKeys.forEach((k, i) => u[k].value.copy(p.sky[i]));
-      sunVector(p, u.sun.value);
-      u.night.value = name === 'night' ? 1 : 0;
-      cache.set(name, pmrem.fromScene(envScene, 0, 0.1, 60, { size: 64 }));
-    }
     const target = cache.get(name);
     if (!blendTarget) {
       blendTarget = target.clone();
@@ -373,7 +411,7 @@ export function createLighting(renderer, scene, district, car, height) {
     const p = params[name],
       a = initial ? 1 : 1 - Math.exp(-dt * 3.8);
     transition += dt;
-    if (initial || blendTo !== cache.get(name)?.texture || !cache.has(name)) environment();
+    if (initial || blendTo !== cache.get(name).texture) environment();
     if (envElapsed < 1) {
       envElapsed = Math.min(1, envElapsed + dt / 1.05);
       mixInto(blendTarget, blendFrom, blendTo, envElapsed * envElapsed * (3 - 2 * envElapsed));
@@ -416,6 +454,7 @@ export function createLighting(renderer, scene, district, car, height) {
       state.mode === 'overview' ? 0 : -state.y,
     );
     light.position.copy(light.target.position).addScaledVector(direction, 235);
+    uniforms.skyTime.value = time;
     sky.position.copy(camera.position);
     initial = false;
     return nightness;
@@ -423,6 +462,7 @@ export function createLighting(renderer, scene, district, car, height) {
   set('dusk');
   return {
     evening: eveningWindows,
+    air: uniforms,
     set,
     update,
     get period() {

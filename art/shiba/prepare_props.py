@@ -46,7 +46,7 @@ def build(cache):
     obstacle.extend(
         LineString([q[:2] for q in line]).buffer(0.18) for line in f["rails"]
     )
-    for x, y, nx, ny, w, _ in json.loads(
+    for x, y, nx, ny, w, *_ in json.loads(
         (ROOT / "assets/shiba-frontages.json").read_text()
     ):
         obstacle.append(

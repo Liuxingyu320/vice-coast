@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const asset = (name) => readFileSync(new URL('../assets/' + name, import.meta.url));
 const map = JSON.parse(asset('shiba-layout.json'));
@@ -102,9 +102,8 @@ const building = {
   ],
 };
 const clip = (x, y) => inside([x, y], fence) && !inside([x, y], building.rings[0]);
-const motion = roadMotion(clip, [building], fence, {
-  nearest: () => ({ heading: 0, distance: 0, width: 12 }),
-});
+const { createCollision } = await import('../src/shiba/collision.js');
+const motion = roadMotion(createCollision(fence, { solids: [building.rings], wells: [], walks: [] }).contact);
 for (const [x, dx, sign] of [
   [-0.99, 0.4, 1],
   [-9.08, -0.4, 1],
@@ -169,3 +168,12 @@ console.log(
     bays.length +
     ' measured frontage bays.',
 );
+
+const { checkTravel } = await import('./shiba-travel.mjs');
+const travel = checkTravel(map, JSON.parse(asset('shiba-solids.json')));
+console.log('Physical travel', travel);
+if (process.env.SHIBA_GEOMETRY_REPORT) {
+  const target = process.env.SHIBA_GEOMETRY_REPORT;
+  const result = JSON.parse(readFileSync(target));
+  writeFileSync(target, JSON.stringify({ ...result, travel }, null, 2) + '\n');
+}

@@ -2,7 +2,7 @@
 
 from collections import Counter, defaultdict
 from pathlib import Path
-import json, struct, os, io
+import json, os, io
 from PIL import Image
 import numpy as np
 import shapely as sh
@@ -20,55 +20,7 @@ EPS = 0.00023  # glTF float32 at a ~1 km origin and the 0.1 mm planar lattice
 counts = {}
 
 
-class GLB:
-    def __init__(self, path):
-        blob = path.read_bytes()
-        nj = struct.unpack_from("<I", blob, 12)[0]
-        self.g = json.loads(blob[20 : 20 + nj])
-        self.bin = memoryview(blob)[28 + nj :]
-        self.nodes = {n["name"]: n for n in self.g["nodes"]}
-        assert all(
-            "matrix" not in n
-            and not any(k in n for k in ("translation", "rotation", "scale"))
-            for n in self.nodes.values()
-        ), "Non-identity survey transform"
-
-    def read(self, i):
-        a = self.g["accessors"][i]
-        view = self.g["bufferViews"][a["bufferView"]]
-        dtype = {5121: "u1", 5123: "<u2", 5125: "<u4", 5126: "<f4"}[a["componentType"]]
-        col = {"VEC2": 2, "VEC3": 3, "VEC4": 4, "SCALAR": 1}[a["type"]]
-        size = np.dtype(dtype).itemsize
-        off = view.get("byteOffset", 0) + a.get("byteOffset", 0)
-        return np.ndarray(
-            (a["count"], col),
-            dtype,
-            self.bin,
-            off,
-            (view.get("byteStride", size * col), size),
-        )
-
-    def meshes(self, name):
-        for prim in self.g["meshes"][self.nodes[name]["mesh"]]["primitives"]:
-            pos = self.read(prim["attributes"]["POSITION"]).astype("f8")
-            xyz = pos[:, [0, 2, 1]]
-            xyz[:, 1] *= -1
-            normal = self.read(prim["attributes"]["NORMAL"])
-            assert np.isfinite(xyz).all() and np.isfinite(normal).all(), name
-            yield (
-                xyz,
-                self.read(prim["indices"]).reshape(-1, 3),
-                self.g["materials"][prim["material"]],
-                prim["attributes"],
-            )
-
-    def texture(self, mat):
-        assert "baseColorTexture" in mat["pbrMetallicRoughness"], mat["name"]
-        tex = self.g["textures"][
-            mat["pbrMetallicRoughness"]["baseColorTexture"]["index"]
-        ]
-        return self.g["images"][tex["source"]]
-
+from gltf_reader import GLB
 
 district = GLB(assets / "shiba-park.glb")
 paving = GLB(assets / "shiba-pavement.glb")
@@ -115,6 +67,15 @@ for name in [*paving.nodes, "shiba-ground"]:
     key = name.removeprefix("paving-")
     file = district if key == "shiba-ground" else paving
     for v, f, mat, attrs in file.meshes(name):
+        if key == "channel":
+            deck_water = sh.union_all(sh.polygons(v[f, :2]))
+            assert deck_water.area > 100 and np.ptp(v[:, 2]) < 0.001
+            assert deck_water.intersection(road).area > 20
+            counts["waterUnderRoadDecksM2"] = round(deck_water.area, 2)
+            continue
+        if key == "bank":
+            assert len(f) > 25 and np.isfinite(v).all()
+            continue
         z = sample(g, v[:, :2])
         delta = v[:, 2] - z
         if key in ("asphaltSkirt", "walkSkirt", "curbFace"):
@@ -145,11 +106,19 @@ for name in [*paving.nodes, "shiba-ground"]:
                 counts["curbSegments"] = len(lines)
                 counts["curbsInsideCarriageway"] = int(intrusion.sum())
             continue
-        raised = key in ("sidewalk", "curb", "tactile")
-        assert np.max(abs(delta - (0.14 if raised else 0))) < EPS, (key, "vertex grade")
+        raised = key in ("sidewalk", "curb", "tactile", "tactileWarn")
+        if key == "water":
+            levels = np.array([p["z"] for p in data["waters"]])
+            assert np.min(abs(v[:, 2, None] - levels), axis=1).max() < EPS
+            assert np.ptp(v[f, 2], axis=1).max() < EPS
+        else:
+            assert np.max(abs(delta - (0.14 if raised else 0))) < EPS, (
+                key,
+                "vertex grade",
+            )
         tri = v[f]
         mid = tri.mean(1)
-        assert (
+        assert key == "water" or (
             np.max(abs(mid[:, 2] - sample(g, mid[:, :2]) - (0.14 if raised else 0)))
             < EPS
         ), (key, "triangle crossed a DEM crease")
@@ -171,7 +140,7 @@ for name in [*paving.nodes, "shiba-ground"]:
             walk_cover.extend(poly)
             assert not sh.intersects(motor, poly).any(), (key, "paving in road")
             assert sh.covers(outside_walk, poly).all(), (key, "outside actual sidewalk")
-        if key in ("asphalt", "zebra", "stop", "white", "yellow"):
+        if key in ("asphalt", "zebra", "stop", "white", "yellow", "inlet", "manhole"):
             assert sh.covers(outside, poly).all(), (key, "outside road")
             asphalt_cover.extend(poly)
             normals = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
@@ -193,10 +162,15 @@ unique, starts = np.unique(codes[ids], return_index=True)
 unions = [sh.union_all(poly[chunk]) for chunk in np.split(ids, starts[1:])]
 complete = sh.union_all(unions)
 overlap = sum(areas.values()) - complete.area
-outside_band = region.buffer(-EPS).difference(complete).area
-assert complete.geom_type == "Polygon" and len(complete.interiors) == 0, (
-    "Holes in the district"
+wells = unary_union([Polygon(s["well"]) for s in data["stations"]])
+expected = region.difference(wells)
+outside_band = expected.buffer(-EPS).difference(complete).area
+assert (
+    complete.geom_type == "Polygon"
+    and len(complete.interiors) == len(data["stations"]) == 3
 )
+assert wells.buffer(-EPS).intersection(complete).is_empty
+assert complete.difference(expected.buffer(EPS)).is_empty
 assert (
     abs(overlap) < 1e-7
     and outside_band < 1e-8
@@ -204,7 +178,10 @@ assert (
 )
 assert (
     abs(
-        sum(areas[k] for k in ("asphalt", "zebra", "stop", "white", "yellow"))
+        sum(
+            areas[k]
+            for k in ("asphalt", "zebra", "stop", "white", "yellow", "inlet", "manhole")
+        )
         - road.area
     )
     < 0.12
@@ -234,7 +211,8 @@ counts.update(
     overlapAreaM2=round(overlap, 8),
     crossingBands=len(data["crosswalkBands"]),
     stopLinesInPedestrianBands=0,
-    interiorHoles=len(complete.interiors),
+    unintendedInteriorHoles=0,
+    surveyedStairOpenings=len(complete.interiors),
     boundaryToleranceM=EPS,
     sharedCurbBoundaryM=round(edge.length, 2),
     maximumRoadSlopePercent=round(100 * max(road_slopes), 2),
@@ -476,7 +454,7 @@ assert not sh.intersects(sh.union_all(masts), rails).any(), "Guardrail intersect
 counts["armsInBuildingsOrCrowns"] = 0
 counts["railMastCollisions"] = 0
 bays = json.loads((assets / "shiba-frontages.json").read_text())
-for x, y, nx, ny, w, kind in bays:
+for x, y, nx, ny, w, kind, *metadata in bays:
     p = np.array([x, y])
     n = np.array([nx, ny])
     t = np.array([-ny, nx])
@@ -503,6 +481,12 @@ for row in fx["amenities"]:
     assert abs(lift - (0.14 if walk.covers(box) else 0)) < EPS, osm
 counts["mappedAmenities"] = dict(Counter(p[0] for p in fx["amenities"]))
 counts["floatingOrObstructingFixtureBases"] = 0
+from verify_details import check
+
+counts.update(check(assets, data, district, paving, road, walk, buildings, region))
+from verify_details import check_daimon_seam
+
+counts.update(check_daimon_seam(data, paving, horizon, region))
 report = json.dumps(counts, indent=2)
 if path := os.environ.get("SHIBA_GEOMETRY_REPORT"):
     Path(path).parent.mkdir(parents=True, exist_ok=True)

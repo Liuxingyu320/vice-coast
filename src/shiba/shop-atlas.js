@@ -1,3 +1,4 @@
+import roomURL from '../../assets/shiba-rooms.jpg';
 import interiorsURL from '../../assets/shiba-shop-interiors.jpg';
 import { canvasMap } from './primitives.js';
 
@@ -18,10 +19,12 @@ export const atlasGrid = [cols, rows];
 export const cells = { glass: 0, sign: 7, blade: 14, closed: 21, ac: 22, guide: 23 };
 // Road signs, shelters and fixtures use a second strip below the shop charts.
 export async function makeShopAtlas() {
-  const interiors = new Image();
+  const interiors = new Image(),
+    room = new Image();
+  room.src = roomURL;
   interiors.src = interiorsURL;
-  await interiors.decode();
-  return canvasMap(cols * size, (rows + 1) * size, (ctx) => {
+  await Promise.all([interiors.decode(), room.decode()]);
+  return canvasMap(cols * size, (rows + 2) * size, (ctx) => {
     function cell(i, paint) {
       ctx.save();
       ctx.translate((i % cols) * size, Math.floor(i / cols) * size);
@@ -84,6 +87,16 @@ export async function makeShopAtlas() {
           ),
         );
       });
+    });
+    cell(28, (g) => {
+      const w = room.width / 2,
+        h = room.height / 2;
+      g.drawImage(room, 2, 2, w - 4, h - 4, 0, 0, 512, 512);
+    });
+    cell(29, (g) => {
+      rect(g, 0, 0, 512, 512, '#393c39');
+      g.scale(1, 6);
+      text(g, 'エントランス', 256, 52, '500 40px sans-serif', '#cfc6ac');
     });
     cell(cells.closed, (g) => {
       rect(g, 0, 0, 512, 512, '#a7aaa5');

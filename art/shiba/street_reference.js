@@ -29,13 +29,24 @@ export async function streetReference() {
         : Array.from({ length: geo.attributes.position.count }, (_, k) => k),
       matrices: [...mesh.instanceMatrix.array],
       colors: mesh.instanceColor ? [...mesh.instanceColor.array] : null,
-      cells: geo.attributes.chartCell ? [...geo.attributes.chartCell.array] : null,
+      cells:
+        geo.attributes.chartCell || geo.attributes.detailCell
+          ? [...(geo.attributes.chartCell || geo.attributes.detailCell).array]
+          : null,
+      grid: mesh.userData.grid || [4, 7],
       map: charts.indexOf(map),
+      cutout: mat.alphaTest > 0 && mesh.name === 'Park low evergreen sprays',
       color: mat.color.toArray(),
       metal: mat.metalness,
       rough: mat.roughness,
       alpha: mat.opacity,
+      emission: mat.emissive ? mat.emissive.toArray().map((x) => x * mat.emissiveIntensity) : null,
     });
   }
-  return { meshes, images: charts.map((img) => img.toDataURL('image/jpeg', 0.94).split(',')[1]) };
+  const images = charts.map((img, i) =>
+    meshes.some((m) => m.map === i && m.cutout)
+      ? img.toDataURL('image/png')
+      : img.toDataURL('image/jpeg', 0.94),
+  );
+  return { meshes, images };
 }

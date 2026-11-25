@@ -1,0 +1,72 @@
+{
+  "buildings": 636,
+  "trees": 540,
+  "streetGroups": 31,
+  "packedImages": 87,
+  "evaluatedGeometry": {
+    "District detail • recessed luminaires": [
+      69,
+      828
+    ],
+    "Park low evergreen sprays": [
+      668,
+      128256
+    ],
+    "Avenue • joinery, shop fittings and street furniture": [
+      12577,
+      150924
+    ],
+    "Avenue • posts": [
+      4026,
+      161040
+    ],
+    "Avenue • paper lanterns and finials": [
+      44,
+      5280
+    ],
+    "Mast base plates": [
+      374,
+      17952
+    ],
+    "Signal and lamp masts": [
+      374,
+      17952
+    ],
+    "Signal and lamp arms": [
+      374,
+      4488
+    ],
+    "Signal visors": [
+      135,
+      4320
+    ],
+    "Signal housings": [
+      45,
+      12780
+    ],
+    "Guard rails": [
+      508,
+      24384
+    ],
+    "Reflector posts": [
+      381,
+      18288
+    ],
+    "Green rail bands": [
+      381,
+      18288
+    ],
+    "Lamp housings": [
+      329,
+      3948
+    ],
+    "Lanterns & reflectors": [
+      329,
+      3948
+    ],
+    "Signal bulbs": [
+      135,
+      22680
+    ]
+  }
+}

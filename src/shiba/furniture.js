@@ -108,15 +108,6 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
     g.fillRect(68, 331, 119, 28);
     g.fillRect(207, 275, 27, 46);
   });
-  const roadSignMap = (title) =>
-    canvasMap(384, 96, (g) => {
-      g.fillStyle = '#e7eae6';
-      g.fillRect(0, 0, 384, 96);
-      g.fillStyle = '#365565';
-      g.textAlign = 'center';
-      g.font = '500 48px sans-serif';
-      g.fillText(title, 192, 65, 352);
-    });
   const panel = new T.PlaneGeometry();
   for (const [kind, id, x, y, nx, ny, lift] of data.fixtures.amenities) {
     if (kind !== 'vending') continue;
@@ -162,23 +153,63 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   instances(scene, 'Lamp housings', box, std('#333e3d'), dark);
   const lit = new T.MeshStandardMaterial({ color: '#f1dbad', emissive: '#ffbb65' });
   instances(scene, 'Lanterns & reflectors', box, lit, lamp);
-  const lensColor = ['#3bd7b0', '#f8c04f', '#f4483f'];
-  const unlit = ['#253933', '#3e3628', '#422a2a'];
-  const signalMats = beads.map(
-    (_, i) =>
-      new T.MeshStandardMaterial({ color: unlit[i % 3], emissive: lensColor[i % 3], roughness: 0.32 }),
-  );
-  beads.forEach((v, i) =>
-    instances(scene, 'Signal bulbs ' + i, new T.SphereGeometry(0.5, 12, 8), signalMats[i], v),
-  );
-  for (const [title, rows] of signs)
-    instances(
-      scene,
-      'Intersection ' + title,
-      box,
-      new T.MeshStandardMaterial({ map: roadSignMap(title) }),
-      rows,
+  const lensColor = ['#3bd7b0', '#f8c04f', '#f4483f'].map((c) => new T.Color(c));
+  const unlit = ['#253933', '#3e3628', '#422a2a'].map((c) => new T.Color(c));
+  const lensMat = new T.MeshStandardMaterial({ roughness: 0.32 });
+  lensMat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vColor*mix(.012,1.36,step(.14,max(vColor.r,max(vColor.g,vColor.b))));',
     );
+  };
+  const lenses = instances(scene, 'Signal bulbs', new T.SphereGeometry(0.5, 12, 8), lensMat, beads.flat());
+  let previousPhase = -1;
+  function switchSignals(time) {
+    const a = time % 24,
+      b = (a + 12) % 24;
+    const phase = [a < 9 ? 0 : a < 11 ? 1 : 2, b < 9 ? 0 : b < 11 ? 1 : 2];
+    const key = phase[0] * 3 + phase[1];
+    if (key === previousPhase) return;
+    let start = 0;
+    beads.forEach((rows, group) => {
+      const k = group % 3,
+        on = phase[Math.floor(group / 3)] === k;
+      for (let i = 0; i < rows.length; i++) lenses.setColorAt(start + i, on ? lensColor[k] : unlit[k]);
+      start += rows.length;
+    });
+    lenses.instanceColor.needsUpdate = true;
+    previousPhase = key;
+  }
+  switchSignals(0);
+  // Each surveyed name keeps its full 384 × 96 source cell on both faces.
+  const titles = [...signs.keys()];
+  const signMap = canvasMap(384, 96 * titles.length, (g) => {
+    titles.forEach((title, i) => {
+      const y = i * 96;
+      g.fillStyle = '#e7eae6';
+      g.fillRect(0, y, 384, 96);
+      g.fillStyle = '#365565';
+      g.textAlign = 'center';
+      g.font = '500 48px sans-serif';
+      g.fillText(title, 192, y + 65, 352);
+    });
+  });
+  const signMat = new T.MeshStandardMaterial({ map: signMap });
+  signMat.onBeforeCompile = (sh) => {
+    sh.uniforms.nameCount = { value: titles.length };
+    sh.vertexShader =
+      'attribute vec3 chartCell; uniform float nameCount;\n' +
+      sh.vertexShader.replace(
+        '#include <uv_vertex>',
+        '#include <uv_vertex>\nvMapUv=(chartCell.xy+.004+uv*.992)/vec2(1.,nameCount);',
+      );
+  };
+  const signBox = box.clone(),
+    cells = [];
+  titles.forEach((title, i) => signs.get(title).forEach(() => cells.push(0, titles.length - 1 - i, 0)));
+  signBox.setAttribute('chartCell', new T.InstancedBufferAttribute(new Float32Array(cells), 3));
+  const plates = instances(scene, 'Named intersections', signBox, signMat, [...signs.values()].flat());
+  plates.userData.grid = [1, titles.length];
   instances(scene, 'Vending cabinets', box, std('white'), boxes);
   const vending = new T.MeshStandardMaterial({
     map: machineMap,
@@ -226,13 +257,6 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
     halo.opacity = amount * 0.68;
     vending.emissiveIntensity = 0.2 + amount * 0.95;
     coneMat.opacity = amount * 0.028;
-    const phase = time % 24;
-    signalMats.forEach((mat, i) => {
-      const t = (phase + (i < 3 ? 0 : 12)) % 24;
-      const selected = t < 9 ? 0 : t < 11 ? 1 : 2;
-      const on = i % 3 === selected;
-      mat.color.set(on ? lensColor[i % 3] : unlit[i % 3]);
-      mat.emissiveIntensity = on ? 1.36 : 0.012;
-    });
+    switchSignals(time);
   };
 }

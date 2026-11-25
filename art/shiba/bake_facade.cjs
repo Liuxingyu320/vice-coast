@@ -22,7 +22,10 @@ const fs = require('node:fs/promises'),
     const { meshes, images } = await page.evaluate(() => Facade.streetReference());
     await fs.writeFile(path.join(cache, 'street-reference.json'), JSON.stringify(meshes));
     for (const [i, image] of images.entries())
-      await fs.writeFile(path.join(cache, 'street-chart-' + i + '.jpg'), Buffer.from(image, 'base64'));
+      await fs.writeFile(
+        path.join(cache, 'street-chart-' + i + (image.startsWith('data:image/png') ? '.png' : '.jpg')),
+        Buffer.from(image.split(',')[1], 'base64'),
+      );
     const lettering = await page.evaluate(() => {
       const canvas = document.createElement('canvas');
       canvas.width = 512;

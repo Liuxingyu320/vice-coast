@@ -15,7 +15,7 @@ def make_tower(materials):
             "Warm windows",
         ]
     )
-    red, glass, steel, lamp = white + 1, white + 2, white + 3, white + 4
+    red, steel = white + 1, white + 3
     verts = []
     faces = []
     mi = []
@@ -115,6 +115,28 @@ def make_tower(materials):
                 pos(sx * rad + u * thick, sy * rad + v * thick, h) for u, v in corners
             ]
             for j in range(4):
+                if h < 75:
+                    x, y, z = nodes[j]
+                    # Collar plates and heads on the exposed lower chord junctions.
+                    beam(
+                        (x, y, z - 0.095),
+                        (x, y, z + 0.095),
+                        0.52 if h < 46 else 0.34,
+                        red,
+                        sides=8,
+                    )
+                    if h < 32:
+                        for a in (-0.34, 0.34):
+                            for b in (-0.34, 0.34):
+                                beam(
+                                    (x + a, y + b, z + 0.09),
+                                    (x + a, y + b, z + 0.145),
+                                    0.061,
+                                    steel,
+                                    sides=6,
+                                )
+                    if h == 0:
+                        beam((x, y, z - 0.56), (x, y, z - 0.11), 0.81, steel, sides=8)
                 k = (j + 1) % 4
                 beam(nodes[j], nodes[k], 0.21 if h < 81 else 0.16, red)
                 if last:

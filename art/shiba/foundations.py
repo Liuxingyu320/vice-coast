@@ -38,8 +38,60 @@ def foundation_mesh(cache, data, supports, gate_bases, material):
         owners.extend([lookup[fid]] * len(pts))
         found.add(fid)
 
+    import json
+
+    passages = json.loads((cache / "passages.json").read_text())
     for fid, _, _, surfaces in features:
-        if fid in supports:
+        from station_sites import TOWER, BASIN
+        from foottown import tower_plan
+
+        stations = {s["shell"]: s for s in data["stations"] if s["shell"]}
+        if fid == TOWER:
+            u, n, xy = tower_plan()
+            world = xy[:, 0, None] * u + xy[:, 1, None] * n
+            ring(fid, np.column_stack([world[::-1], np.full(len(xy), 18.391)]))
+        elif fid in stations or fid == BASIN:
+            # The original solid shell wrapped the mouth in a retaining wall.
+            # Only the actual support shoes reach grade after opening the pavilion.
+            if fid in stations:
+                st = stations[fid]
+                o = np.array(st["mouth"])
+                n = np.array(st["down"])
+                t = np.array([-n[1], n[0]])
+                half = min(2.38, st["width"] - 0.42) / 2 + 0.058
+                anchors = [
+                    o + sign * t * half + n * v
+                    for sign in [-1, 1]
+                    for v in [0.19, st["length"] - 0.65]
+                ]
+                size = 0.055
+            else:
+                rim = next(r[0][1] for role, r in surfaces if role == "GroundSurface")
+                o = np.mean(rim[:, :2], axis=0)
+                n = np.array([0.993, -0.119])
+                t = np.array([-n[1], n[0]])
+                anchors = [
+                    o + t * u + n * v for u in [-1.76, 1.76] for v in [-1.48, 1.48]
+                ]
+                size = 0.19
+            for anchor in anchors:
+                xy = anchor + np.array(
+                    [[-size, -size], [-size, size], [size, size], [size, -size]]
+                )
+                ring(fid, np.column_stack([xy, sample(grid, xy)]))
+        elif fid in passages:
+            for coordinates in passages[fid]["foundations"]:
+                xy = np.array(coordinates)
+                if (
+                    np.sum(
+                        xy[:, 0] * np.roll(xy[:, 1], -1)
+                        - np.roll(xy[:, 0], -1) * xy[:, 1]
+                    )
+                    > 0
+                ):
+                    xy = xy[::-1]
+                ring(fid, np.column_stack((xy, sample(grid, xy))))
+        elif fid in supports:
             for points in supports[fid]:
                 xy = np.asarray(points)
                 if np.cross(xy, np.roll(xy, -1, axis=0)).sum() > 0:

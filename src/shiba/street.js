@@ -75,6 +75,7 @@ export function makeStreets(data) {
   return { roads, paths, sites, junctions, nearest, onRoad };
 }
 export function createTrees(scene, district, trees) {
+  const groves = [];
   for (let kind = 0; kind < 3; kind++) {
     const prototype = district.getObjectByName('tree-prototype-' + kind);
     const rows = [];
@@ -82,6 +83,8 @@ export function createTrees(scene, district, trees) {
       if ((i % 11 < 6 ? 0 : i % 11 < 9 ? 1 : 2) !== kind) return;
       rows.push([x, z, -y, radius, height, radius, i * 2.399963]);
     });
+    const meshes = [],
+      bounds = new T.Box3().setFromObject(prototype);
     prototype.traverse((branch) => {
       if (!branch.isMesh) return;
       const leaf = branch.material.name === 'Leaf sprays';
@@ -97,7 +100,7 @@ export function createTrees(scene, district, trees) {
         mat.metalness = 0;
         mat.envMapIntensity = 0.25;
         mat.emissive.setRGB(0.027, 0.035, 0.018);
-        mat.emissiveIntensity = 0.18;
+        mat.emissiveIntensity = 0.28;
         mat.onBeforeCompile = (sh) => {
           // Leaf cards share a crown normal even when seen from behind.
           sh.vertexShader = sh.vertexShader.replace(
@@ -105,6 +108,10 @@ export function createTrees(scene, district, trees) {
             '#include <beginnormal_vertex>\nobjectNormal=normalize(vec3(position.x,(position.y-.55)*6.0+.25,position.z));',
           );
           sh.fragmentShader = sh.fragmentShader
+            .replace(
+              '#include <emissivemap_fragment>',
+              '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*(.085+.09*pow(1.-abs(dot(normal,normalize(vViewPosition))),2.));',
+            )
             .replace(
               '#include <normal_fragment_begin>',
               T.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''),
@@ -115,15 +122,66 @@ export function createTrees(scene, district, trees) {
             );
         };
       }
-      instances(
-        scene,
-        (leaf ? 'Leaf clusters ' : 'Trunks and boughs ') + kind,
-        branch.geometry,
-        mat,
-        rows,
-        true,
+      meshes.push(
+        instances(
+          scene,
+          (leaf ? 'Leaf clusters ' : 'Trunks and boughs ') + kind,
+          branch.geometry,
+          mat,
+          rows,
+          true,
+        ),
       );
+    });
+    const transforms = meshes[0].instanceMatrix.array.slice(),
+      buffer = meshes[0].instanceMatrix;
+    buffer.setUsage(T.DynamicDrawUsage);
+    for (const mesh of meshes) mesh.instanceMatrix = buffer;
+    const matrix = new T.Matrix4();
+    const spheres = rows.map((_, i) =>
+      bounds
+        .clone()
+        .applyMatrix4(matrix.fromArray(transforms, i * 16))
+        .getBoundingSphere(new T.Sphere()),
+    );
+    groves.push({
+      meshes,
+      transforms,
+      buffer,
+      spheres,
+      indices: new Int32Array(rows.length).fill(-1),
+      size: -1,
     });
     prototype.removeFromParent();
   }
+  // Keep off-camera shadow casters. A single draw per species/material still represents every
+  // tree that can reach either the camera or the directional shadow map.
+  const light = scene.children.find((o) => o.isDirectionalLight),
+    view = new T.Frustum(),
+    matrix = new T.Matrix4();
+  scene.onBeforeRender = (_renderer, _scene, camera) => {
+    view.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    light.shadow.updateMatrices(light);
+    const shadow = light.shadow.getFrustum();
+    for (const grove of groves) {
+      let length = 0,
+        changed = false;
+      for (let i = 0; i < grove.spheres.length; i++) {
+        const sphere = grove.spheres[i];
+        if (!view.intersectsSphere(sphere) && !shadow.intersectsSphere(sphere)) continue;
+        if (grove.indices[length] !== i) changed = true;
+        grove.indices[length++] = i;
+      }
+      if (!changed && length === grove.size) continue;
+      for (let j = 0; j < length; j++) {
+        const offset = grove.indices[j] * 16;
+        grove.buffer.array.set(grove.transforms.subarray(offset, offset + 16), j * 16);
+      }
+      grove.buffer.clearUpdateRanges();
+      grove.buffer.addUpdateRange(0, length * 16);
+      grove.buffer.needsUpdate = true;
+      grove.size = length;
+      for (const mesh of grove.meshes) mesh.count = length;
+    }
+  };
 }

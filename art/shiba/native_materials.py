@@ -10,7 +10,14 @@ def detail_materials(obj, feature, assets, cache):
         photo = base.name.startswith(
             ("Facade ", "Backdrop facade", "Temple Facade", "Tower Facade")
         )
-        if not (terrain or photo):
+        modern = base.name.startswith(("Facade ", "Backdrop facade")) or base.name in (
+            "Curtain wall",
+            "Metal sash",
+            "Ribbon office",
+            "Porcelain tile",
+            "FootTown glazing",
+        )
+        if not (terrain or photo or modern):
             continue
         key = ("Terrain detail · " if terrain else "Survey detail · ") + base.name
         if key in cache:
@@ -121,6 +128,35 @@ def detail_materials(obj, feature, assets, cache):
                     mix(albedo, finish.outputs["Color"], 0.22, "SOFT_LIGHT"),
                     bs.inputs["Base Color"],
                 )
+        if modern:
+            # Camera incidence shifts the room sample behind the glazing. The photograph or
+            # metric facade remains visible around it in the editable, offline material.
+            room = node("ShaderNodeTexImage")
+            room.image = bpy.data.images.load(
+                str(assets / "shiba-rooms.jpg"), check_existing=True
+            )
+            room.projection = "BOX"
+            room.projection_blend = 0.08
+            ray = vector("MULTIPLY", geometry.outputs["Incoming"], (0.24, 0.24, 0.13))
+            coord = node("ShaderNodeVectorMath")
+            coord.operation = "ADD"
+            link(
+                vector("MULTIPLY", position, (1 / 4.8, 1 / 4.8, 1 / 6.6)),
+                coord.inputs[0],
+            )
+            link(ray, coord.inputs[1])
+            link(coord.outputs["Vector"], room.inputs["Vector"])
+            finish = bs.inputs["Base Color"].links[0].from_socket
+            link(
+                mix(
+                    finish,
+                    room.outputs["Color"],
+                    0.19 if base.name == "FootTown glazing" else 0.083,
+                ),
+                bs.inputs["Base Color"],
+            )
+            if base.name == "FootTown glazing":
+                bs.inputs["Roughness"].default_value = 0.25
         grain = node("ShaderNodeTexNoise")
         grain.inputs["Scale"].default_value = 92 if terrain else 76
         grain.inputs["Detail"].default_value = 2

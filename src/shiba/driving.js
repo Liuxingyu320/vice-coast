@@ -4,22 +4,60 @@ import { canvasMap } from './primitives.js';
 
 export function batchCar(car) {
   const parts = new Map();
+  const names = ['LF', 'RF', 'LR', 'RR'],
+    tyres = Array(4),
+    travel = { value: new T.Vector4() };
+  function suspension(mat) {
+    const before = mat.onBeforeCompile;
+    mat.onBeforeCompile = function (sh, r) {
+      before.call(this, sh, r);
+      sh.uniforms.shibaWheelTravel = travel;
+      sh.vertexShader =
+        'attribute float wheelId;uniform vec4 shibaWheelTravel;\n' +
+        sh.vertexShader.replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\nif(wheelId>=0.)transformed.y+=shibaWheelTravel[int(wheelId)];',
+        );
+    };
+    mat.customProgramCacheKey = () => 'shiba-four-contact-patches';
+  }
   car.updateMatrixWorld(true);
   car.traverse((o) => {
     if (!o.isMesh) return;
     const a = parts.get(o.material) || [];
     const g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    let joint = o;
+    while (joint && !joint.userData.rigSlot) joint = joint.parent;
+    const id = names.indexOf(joint?.userData.rigSlot?.replace('wheel_', ''));
+    g.setAttribute(
+      'wheelId',
+      new T.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(id), 1),
+    );
+    if (id >= 0 && o.material.name === 'Coal rubber') {
+      g.computeBoundingBox();
+      const point = g.boundingBox.getCenter(new T.Vector3());
+      point.y = g.boundingBox.min.y;
+      tyres[id] = point;
+    }
     a.push(g);
     parts.set(o.material, a);
   });
   car.clear();
+  if (tyres.filter(Boolean).length !== 4) throw Error('Four measured tyre contact patches required');
+  car.userData.tyres = tyres;
+  car.userData.wheelTravel = travel;
+  const depth = new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking });
+  suspension(depth);
   for (const [m, geometries] of parts) {
     const g = mergeGeometries(geometries);
-    car.add(new T.Mesh(g, m));
+    suspension(m);
+    const mesh = new T.Mesh(g, m);
+    mesh.customDepthMaterial = depth;
+    car.add(mesh);
     for (const q of geometries) q.dispose();
   }
 }
-export function createDriving(car, terrain, passable, footprints, boundary, streets) {
+export function createDriving(car, terrain, contact) {
   const rotation = { yawRate: 0, bank: 0, pitch: 0, orbit: 0, lift: 0, release: -100 },
     look = new T.Vector3(),
     eye = new T.Vector3(),
@@ -107,7 +145,7 @@ export function createDriving(car, terrain, passable, footprints, boundary, stre
       dt,
     );
   }
-  const move = roadMotion(passable, footprints, boundary, streets);
+  const move = roadMotion(contact);
   function spring(current, velocity, target, frequency, dt) {
     const steps = Math.max(1, Math.ceil(dt / 0.012));
     for (let i = 0; i < steps; i++) {
@@ -121,13 +159,44 @@ export function createDriving(car, terrain, passable, footprints, boundary, stre
       current.addScaledVector(velocity, t);
     }
   }
+  const wheelWorld = Array.from({ length: 4 }, () => new T.Vector3()),
+    tyreHeight = new Float64Array(4);
+  function alignCar(s) {
+    const { tyres, wheelTravel } = car.userData,
+      si = Math.sin(s.heading),
+      co = Math.cos(s.heading);
+    for (let i = 0; i < 4; i++) {
+      const p = tyres[i];
+      tyreHeight[i] = terrain(s.x + p.x * co - p.z * si, s.y - p.x * si - p.z * co);
+    }
+    const pitch = Math.atan2(
+      (tyreHeight[0] + tyreHeight[1] - tyreHeight[2] - tyreHeight[3]) * 0.5,
+      tyres[2].z - tyres[0].z,
+    );
+    const roll = Math.atan2(
+      (tyreHeight[1] + tyreHeight[3] - tyreHeight[0] - tyreHeight[2]) * 0.5,
+      tyres[1].x - tyres[0].x,
+    );
+    car.rotation.set(pitch + rotation.pitch * 0.4, -s.heading, roll + rotation.bank * 0.38, 'YXZ');
+    car.position.set(s.x, 0, -s.y);
+    car.updateMatrix();
+    let height = 0;
+    for (let i = 0; i < 4; i++) {
+      wheelWorld[i].copy(tyres[i]).applyMatrix4(car.matrix);
+      height += tyreHeight[i] - wheelWorld[i].y;
+    }
+    car.position.y = height / 4;
+    car.updateMatrix();
+    for (let i = 0; i < 4; i++) {
+      const p = wheelWorld[i],
+        actual = terrain(p.x, -p.z);
+      wheelTravel.value.setComponent(i, (actual - car.position.y - p.y) / car.matrix.elements[5]);
+    }
+  }
   function cameraMove(camera, s, ground, dt, now, dragging, night) {
     const dx = Math.sin(s.heading),
-      dy = Math.cos(s.heading),
-      gFront = terrain(s.x + dx, s.y + dy),
-      gBack = terrain(s.x - dx, s.y - dy);
-    car.position.set(s.x, ground + 0.13, -s.y);
-    car.rotation.set(rotation.pitch + Math.atan2(gFront - gBack, 2), -s.heading, rotation.bank, 'YXZ');
+      dy = Math.cos(s.heading);
+    alignCar(s);
     brakes.forEach((m) => {
       m.emissive.set('#FF2424');
       m.emissiveIntensity = brake || s.speed < -0.1 ? 3.1 : 0.3 + night * 0.6;
@@ -204,54 +273,7 @@ export function createDriving(car, terrain, passable, footprints, boundary, stre
   };
 }
 
-export function roadMotion(passable, footprints, boundary, streets) {
-  function boundaryTangent(x, y) {
-    let best = Infinity,
-      tangent = [0, 0];
-    const visit = (ring) => {
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [ax, ay] = ring[j],
-          [bx, by] = ring[i],
-          dx = bx - ax,
-          dy = by - ay,
-          L = dx * dx + dy * dy;
-        if (!L) continue;
-        const t = T.MathUtils.clamp(((x - ax) * dx + (y - ay) * dy) / L, 0, 1),
-          distance = (ax + dx * t - x) ** 2 + (ay + dy * t - y) ** 2;
-        if (distance < best) {
-          best = distance;
-          tangent = [dx / Math.sqrt(L), dy / Math.sqrt(L)];
-        }
-      }
-    };
-    visit(boundary);
-    for (const f of footprints) {
-      if (x < f.box[0] - 3 || x > f.box[2] + 3 || y < f.box[1] - 3 || y > f.box[3] + 3) continue;
-      f.rings.forEach(visit);
-    }
-    return tangent;
-  }
-  const probes = [
-    [0, 0],
-    [-0.85, 1.8],
-    [0.85, 1.8],
-    [-0.85, -1.7],
-    [0.85, -1.7],
-    [0, 2.14],
-    [0, -2.05],
-  ];
-  function contact(x, y, heading) {
-    const sn = Math.sin(heading),
-      cs = Math.cos(heading);
-    for (const [side, fore] of probes) {
-      const px = x + cs * side + sn * fore,
-        py = y - sn * side + cs * fore;
-      if (!passable(px, py)) return boundaryTangent(px, py);
-    }
-    const r = streets.nearest(x, y);
-    if (r.distance > r.width * 0.5 + 0.45) return [Math.sin(r.heading), Math.cos(r.heading)];
-    return null;
-  }
+export function roadMotion(contact) {
   function move(s, dx, dy) {
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 0.42));
     for (let i = 0; i < steps; i++) {

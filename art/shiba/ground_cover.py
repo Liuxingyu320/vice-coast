@@ -5,7 +5,7 @@ import json, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from scipy.ndimage import distance_transform_edt
-from shapely import Polygon
+from shapely import Polygon, LineString, union_all
 from shiba_site import roads_and_boundary
 
 root = Path(__file__).resolve().parents[2]
@@ -42,6 +42,22 @@ def build(cache):
     # Distances in metres: contact darkening at a wall, with a short and a broad penumbra.
     d = distance_transform_edt(np.asarray(base) == 0) / scale
     ao = 1 - 0.26 * np.exp(-d / 0.85) - 0.13 * np.exp(-d / 4.5)
+    carriageway = Image.new("L", size)
+    paint(
+        union_all(
+            [
+                LineString(p).buffer(info[0] / 2, quad_segs=12)
+                for (k, p), info in zip(data["roads"], data["roadInfo"])
+                if k == "road"
+            ]
+        ),
+        carriageway,
+    )
+    motor = np.asarray(carriageway) > 0
+    kerb_distance = (
+        distance_transform_edt(motor) + distance_transform_edt(~motor) - 0.75
+    ) / scale
+    ao *= 1.0 - 0.14 * np.exp(-np.maximum(kerb_distance, 0) / 0.47)
     for x, y, z, h, r in data["trees"]:
         px = (x - xmin) * scale
         py = (ymin + height - y) * scale
@@ -66,6 +82,9 @@ def build(cache):
         along = ((xx - px) * dx - (yy - py) * dy) / scale
         across = (-(xx - px) * dy - (yy - py) * dx) / scale
         pools[y0:y1, x0:x1] += np.exp(-0.5 * ((along / 5.2) ** 2 + (across / 3.4) ** 2))
+    from street_light import fields
+
+    fields(root, data, ao, size, scale, xmin, ymin + height, coords)
     image = Image.merge(
         "RGB",
         (

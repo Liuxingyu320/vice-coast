@@ -3,6 +3,7 @@
 import json
 import numpy as np
 import bpy
+from native_instances import point_instances
 
 
 def add_street_reference(cache, make, coll, names, mats):
@@ -19,19 +20,45 @@ def add_street_reference(cache, make, coll, names, mats):
         bs.inputs["Metallic"].default_value = row["metal"] or 0
         bs.inputs["Base Color"].default_value = (*row["color"], 1)
         bs.inputs["Alpha"].default_value = row["alpha"]
+        if row["emission"] and any(row["emission"]):
+            bs.inputs["Emission Color"].default_value = (*row["emission"], 1)
+            bs.inputs["Emission Strength"].default_value = 0.42
         if row["map"] >= 0:
             tex = nodes.new("ShaderNodeTexImage")
             tex.image = bpy.data.images.load(
-                str(cache / f"street-chart-{row['map']}.jpg"), check_existing=True
+                str(
+                    cache
+                    / (
+                        "street-chart-"
+                        + str(row["map"])
+                        + (".png" if row["cutout"] else ".jpg")
+                    )
+                ),
+                check_existing=True,
             )
             links.new(tex.outputs["Color"], bs.inputs["Base Color"])
+            if row["cutout"]:
+                links.new(tex.outputs["Alpha"], bs.inputs["Alpha"])
+                mat.surface_render_method = "DITHERED"
         if row["colors"]:
             node = nodes.new("ShaderNodeVertexColor")
             node.layer_name = "Paint"
             links.new(node.outputs["Color"], bs.inputs["Base Color"])
+            if row["name"] == "Signal bulbs":
+                links.new(node.outputs["Color"], bs.inputs["Emission Color"])
+                bright = nodes.new("ShaderNodeMath")
+                bright.operation = "GREATER_THAN"
+                bright.inputs[1].default_value = 0.12
+                links.new(node.outputs["Color"], bright.inputs[0])
+                links.new(bright.outputs[0], bs.inputs["Emission Strength"])
         transforms = np.asarray(row["matrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
         pos = np.asarray(row["pos"]).reshape(-1, 3)
         uv = np.asarray(row["uv"]).reshape(-1, 2)
+        if len(transforms) > 35 and not row["cells"]:
+            point_instances(
+                row, transforms, pos, uv, make, coll("街具・店舗｜実景"), len(mats) - 1
+            )
+            continue
         xyz = (
             np.einsum("nij,vj->nvi", transforms[:, :3, :3], pos)
             + transforms[:, :3, 3][:, None, :]
@@ -40,7 +67,7 @@ def add_street_reference(cache, make, coll, names, mats):
         xyz[:, :, 1] *= -1
         if row["cells"]:
             cell = np.asarray(row["cells"]).reshape(-1, 3)[:, :2]
-            uv = (cell[:, None, :] + 0.004 + uv[None, :, :] * 0.992) / [4, 7]
+            uv = (cell[:, None, :] + 0.004 + uv[None, :, :] * 0.992) / row["grid"]
         else:
             uv = np.tile(uv, (len(xyz), 1))
         faces = (np.arange(len(xyz))[:, None] * len(pos) + row["indices"]).reshape(

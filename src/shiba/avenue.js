@@ -1,6 +1,8 @@
 import * as T from 'three';
 import frontages from '../../assets/shiba-frontages.json';
 import { instances, canvasMap } from './primitives.js';
+import { addUnderstory } from './understory.js';
+import { buildCityDetail } from './city-detail.js';
 import { makeShopAtlas, brands, cells } from './shop-atlas.js';
 
 // A placement frame has local X along a frontage and local Z facing the street.
@@ -11,8 +13,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     cones = [],
     rings = [],
     balls = [],
-    cards = [],
-    decals = [];
+    cards = [];
   const inventory = {
     frontages: frontages.length,
     benches: 0,
@@ -35,24 +36,16 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     const [x, y] = P(o, u, v);
     cards.push({ row: [x, o.z + z, -y, w, h, 1, o.yaw + turn], chart, glow });
   }
-  function flat(o, u, v, w, h, chart, alt = 0.025) {
-    const [x, y] = P(o, u, v);
-    decals.push({
-      row: [x, ground(x, y) + alt, -y, w, h, 1, o.yaw, undefined, -Math.PI / 2],
-      chart,
-      glow: 0,
-    });
-  }
   function slat(o, u, v, z, w, h, d, col) {
     box(o, u, v, z, w, h, d, col);
   }
   // Each repeated bay is mounted to a surveyed wall normal; the parapet and jambs conceal the photo at grade.
-  for (const [i, [x, y, nx, ny, width, seed]] of frontages.entries()) {
+  for (const [i, [x, y, nx, ny, width, seed, owner, lobby]] of frontages.entries()) {
     const o = loc(x, y, nx, ny),
       kind = (seed + Math.floor(i / 2) * 3) % brands.length,
       ink = brands[kind][2],
       w = Math.min(width, 9.8),
-      closed = i % 13 === 8;
+      closed = !lobby && i % 13 === 8;
     const edgeLevels = [-w / 2, 0, w / 2].map((u) => {
       const [xx, yy] = P(o, u, 0.32);
       return ground(xx, yy);
@@ -62,7 +55,16 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     const foundationDepth = o.z - bottom;
     box(o, 0, 0.18, -foundationDepth / 2, w, foundationDepth, 0.36, '#59605e');
     box(o, 0, 0.12, 1.88, w, 3.76, 0.2, '#3f4542');
-    face(o, 0, 0.228, 1.57, w - 0.2, 2.88, closed ? cells.closed : kind, closed ? 0.02 : 0.31);
+    face(
+      o,
+      0,
+      0.228,
+      1.57,
+      w - 0.2,
+      2.88,
+      closed ? cells.closed : lobby ? 28 : kind,
+      closed ? 0.02 : lobby ? 0.23 : 0.31,
+    );
     // Physical reveals and door hardware stay in front of recessed interior glazing.
     for (const u of [-w * 0.48, w * 0.48]) box(o, u, 0.32, 1.52, 0.11, 2.95, 0.23, '#414b4d');
     box(o, 0, 0.34, 2.6, w - 0.2, 0.052, 0.13, '#777e7c');
@@ -75,8 +77,11 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     box(o, 0, 0.28, 0.12, w, 0.24, 0.24, '#626761');
     for (const u of [-w * 0.49, -w * 0.16, w * 0.49]) box(o, u, 0.3, 1.6, 0.072, 2.96, 0.12, '#7c8785');
     box(o, 0, 0.33, 3.37, w, 0.72, 0.3, '#4c514c');
-    face(o, 0, 0.494, 3.37, w - 0.1, 0.64, 7 + kind, 0.88);
-    if (i % 3 !== 0) {
+    face(o, 0, 0.494, 3.37, w - 0.1, 0.64, lobby ? 29 : 7 + kind, lobby ? 0.25 : 0.88);
+    if (lobby) {
+      for (const u of [-w * 0.46, w * 0.46]) box(o, u, 0.29, 1.88, 0.26, 3.73, 0.31, '#565955');
+      box(o, 0, 0.49, 3.79, w, 0.13, 0.75, '#858880');
+    } else if (i % 3 !== 0) {
       box(o, 0, 0.62, 2.91, w + 0.07, 0.12, 0.98, ink, 0, 0.105);
       box(o, 0, 1.06, 2.76, w + 0.06, 0.22, 0.085, ink);
       if (kind === 1 || kind === 6) {
@@ -88,7 +93,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
         for (const z of [1.78, 2.2]) post(o, w * 0.39, 0.88, z, 0.23, 0.056, 0.23, '#383a37');
       }
     }
-    if (i % 3 === 1) {
+    if (!lobby && i % 3 === 1) {
       const u = w * 0.41;
       box(o, u, 0.78, 3.49, 0.16, 1.68, 0.72, '#4e5554');
       for (const side of [-1, 1])
@@ -234,22 +239,24 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
       );
     }
   }
-  for (const r of streets.roads)
-    for (const s of r.segments) {
-      if (r.width < 5.6 || s.len < 7) continue;
-      for (let t = 4; t < s.len; t += 15) {
-        const x = s.x + s.dx * t,
-          y = s.y + s.dy * t;
-        const axis =
-          (x > 405 && x < 890 && Math.abs(y + 145 + (x - 405) * 0.125) < 44) ||
-          (x > -5 && x < 120 && y > -370 && y < -68) ||
-          (x > 130 && x < 399 && Math.abs(y + 333) < 20);
-        if (!axis) continue;
-        const o = loc(x, y, s.dy, -s.dx);
-        flat(o, 0, r.width * 0.5 - 0.35, 0.57, 0.34, 27, 0.003);
-        if (t === 4) flat(o, 0, 1.24, 0.61, 0.61, 26, 0.003);
-      }
-    }
+  const detail = buildCityDetail({
+    scene,
+    part,
+    cubes,
+    cylinders,
+    balls,
+    cones,
+    rings,
+    loc,
+    ground,
+    box,
+    post,
+    face,
+    bike,
+    shelters,
+  });
+  Object.assign(inventory, detail.counts);
+  addUnderstory(scene, detail.shrubRows);
   const steel = new T.MeshStandardMaterial({ roughness: 0.71, metalness: 0.06 });
   instances(
     scene,
@@ -283,7 +290,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     geo.setAttribute(
       'chartCell',
       new T.InstancedBufferAttribute(
-        Float32Array.from(list.flatMap((p) => [p.chart % 4, 6 - Math.floor(p.chart / 4), p.glow])),
+        Float32Array.from(list.flatMap((p) => [p.chart % 4, 7 - Math.floor(p.chart / 4), p.glow])),
         3,
       ),
     );
@@ -300,7 +307,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
         'attribute vec3 chartCell;varying float signLight;\n' +
         sh.vertexShader.replace(
           '#include <uv_vertex>',
-          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.004)+uv*.992)/vec2(4.,7.);signLight=chartCell.z;',
+          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.004)+uv*.992)/vec2(4.,8.);signLight=chartCell.z;',
         );
       sh.fragmentShader =
         'varying float signLight;uniform float streetEvening;\n' +
@@ -309,19 +316,20 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
           '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*signLight*(.18+streetEvening*1.5);',
         );
     };
-    instances(
+    const mesh = instances(
       scene,
       name,
       geo,
       mat,
       list.map((p) => p.row),
     );
+    mesh.userData.grid = [4, 8];
   }
   panels('Avenue • interior glazing, signage and displays', cards);
-  panels('Avenue • ironwork flush with asphalt', decals);
   return {
     inventory,
-    update(amount) {
+    update(amount, time) {
+      detail.update(amount, time);
       evening.value = amount;
     },
   };

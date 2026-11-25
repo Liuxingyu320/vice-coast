@@ -7,10 +7,15 @@ import numpy as np
 FACADE = ("Curtain wall", "Ribbon office", "Porcelain tile", "Metal sash")
 SURFACE = {
     "asphalt": "Cold asphalt",
+    "water": "Canal water",
+    "bank": "River masonry",
+    "inlet": "Storm inlet",
+    "manhole": "Cast iron cover",
     "sidewalk": "Permeable pavers",
     "forecourt": "Granite setts",
     "curb": "Kerb granite",
-    "tactile": "Tenji yellow",
+    "tactile": "Guidance bars",
+    "tactileWarn": "Tenji yellow",
     "white": "White paint",
     "yellow": "Amber paint",
     "zebra": "White paint",
@@ -25,6 +30,7 @@ METRES = {
     "forecourt": 2.4,
     "curb": 1.2,
     "tactile": 0.30,
+    "tactileWarn": 0.30,
 }
 
 
@@ -56,6 +62,69 @@ def create_materials(dest):
         255,
     ).astype("u1")
     save("Cold asphalt", asphalt)
+    save("Canal water", mineral((57, 84, 81), 2, 512))
+    save("River masonry", mineral((102, 105, 94), 5, 512))
+    bridge = Image.fromarray(mineral((138, 140, 134), 5, 768))
+    form = ImageDraw.Draw(bridge)
+    for x in [0, 384, 767]:
+        form.line((x, 0, x, 768), fill=(111, 116, 111), width=3)
+    for y in [0, 256, 512, 767]:
+        form.line((0, y, 768, y), fill=(119, 122, 113), width=2)
+    for x in [46, 338, 430, 722]:
+        for y in [42, 211, 300, 464, 554, 725]:
+            form.ellipse(
+                (x - 3, y - 3, x + 3, y + 3),
+                fill=(95, 102, 96),
+                outline=(147, 148, 135),
+            )
+    field = np.indices((768, 768))[1]
+    leak = (
+        np.cos(field * 2 * np.pi / 768 * 8) + np.cos(field * 2 * np.pi / 768 * 23)
+    ) * 0.95
+    save(
+        "Bridge concrete",
+        np.uint8(np.clip(np.asarray(bridge) + leak[:, :, None], 0, 255)),
+    )
+    for art in ["Storm inlet", "Cast iron cover"]:
+        im = Image.fromarray(mineral((85, 86, 80), 8, 512))
+        b = ImageDraw.Draw(im)
+        if art == "Storm inlet":
+            b.rounded_rectangle(
+                (7, 7, 505, 505), radius=14, outline=(139, 142, 133), width=7
+            )
+            for y in range(34, 485, 43):
+                for x in [29, 265]:
+                    b.rounded_rectangle(
+                        (x, y, x + 210, y + 23), radius=8, fill=(40, 46, 46)
+                    )
+        else:
+            for radius in [245, 236, 214, 71, 60]:
+                b.ellipse(
+                    (256 - radius, 256 - radius, 256 + radius, 256 + radius),
+                    outline=(137, 139, 129),
+                    width=5,
+                )
+            for radius, num in [(100, 15), (130, 18), (159, 25), (187, 31)]:
+                for a in np.arange(num) * 2 * np.pi / num:
+                    x = 256 + radius * np.cos(a)
+                    y = 256 + radius * np.sin(a)
+                    b.line(
+                        (
+                            x - 9 * np.cos(a - 0.63),
+                            y - 9 * np.sin(a - 0.63),
+                            x + 9 * np.cos(a - 0.63),
+                            y + 9 * np.sin(a - 0.63),
+                        ),
+                        fill=(131, 133, 122),
+                        width=6,
+                    )
+            for a in np.arange(6) * np.pi / 3:
+                x = 256 + 25 * np.cos(a)
+                y = 256 + 25 * np.sin(a)
+                b.ellipse(
+                    (x - 11, y - 11, x + 11, y + 11), outline=(144, 145, 131), width=4
+                )
+        save(art, np.asarray(im))
     deck = asphalt.copy()
     for i in (36, 982):
         deck[:, i : i + 14] = np.clip(
@@ -104,6 +173,14 @@ def create_materials(dest):
     out[:2] *= 0.64
     out[:, :2] *= 0.64
     save("Tenji yellow", out.clip(0, 255).astype("u1"))
+    bars = mineral((213, 169, 52), 3, 256).astype(float)
+    rib = (x / 256 * 4 + 0.5) % 1 - 0.5
+    bars += np.where(
+        abs(rib) < 0.17, 11 - rib * 110, np.where(abs(rib) < 0.22, -17, 0)
+    )[:, :, None]
+    bars[:2] *= 0.69
+    bars[:, :2] *= 0.69
+    save("Guidance bars", bars.clip(0, 255).astype("u1"))
     for style, name in enumerate(FACADE):
         # Each tile spans eight bays by eight 3.3 m storeys. Frames, sills and night apertures are co-registered.
         image = Image.new("RGB", (1024, 1024))
@@ -234,6 +311,21 @@ def create_materials(dest):
     rail = mineral((177, 177, 168), 2, 256).astype(float)
     rail += random.normal(0, 1.5, (256, 1, 1))
     save("Hall handrail", rail.clip(0, 255).astype("u1"))
+    y, x = np.indices((512, 512))
+    noise = random.normal(0, 1.2, (512, 512))
+    for name, color in [
+        ("FootTown panel", (172, 173, 164)),
+        ("FootTown glazing", (54, 83, 94)),
+        ("FootTown frame", (100, 104, 105)),
+    ]:
+        surf = np.array(color) + noise[:, :, None]
+        if name == "FootTown panel":
+            surf += np.where(((x % 241) < 2) | ((y % 123) < 2), -31, 0)[:, :, None]
+        if name == "FootTown glazing":
+            surf += (
+                13 * np.sin(y / 512 * np.pi * 2) + 5 * np.sin(x / 512 * np.pi * 2)
+            )[:, :, None]
+        save(name, surf.clip(0, 255).astype("u1"))
     save("Hall gilt", mineral((172, 141, 72), 5))
     pane = mineral((60, 77, 80), 2).astype(float)
     yy, xx = np.indices((512, 512))

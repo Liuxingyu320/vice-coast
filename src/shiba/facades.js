@@ -1,4 +1,5 @@
 import * as T from 'three';
+import roomUrl from '../../assets/shiba-rooms.jpg';
 import templeJoineryUrl from '../../assets/shiba-temple-joinery.jpg';
 
 const styles = ['Curtain wall', 'Ribbon office', 'Porcelain tile', 'Metal sash'];
@@ -28,6 +29,30 @@ export function buildingFinish(district, evening, height) {
   }
   const facadeChart = compose('map'),
     windowChart = compose('emissiveMap');
+  const rooms = new T.TextureLoader().load(roomUrl);
+  rooms.colorSpace = T.SRGBColorSpace;
+  rooms.anisotropy = 8;
+  // Project a viewing ray into a shallow virtual room for each metre-scaled bay.
+  // Frame and masonry pixels retain the measured albedo and specular response.
+  const roomCode = `uniform float evening;uniform sampler2D roomChart;
+    float windowSeed(vec2 p){return fract(sin(dot(p,vec2(13.17,79.31)))*4375.873);}
+    vec3 interior(vec2 metres, vec3 normal,vec2 tanAxis, vec3 world, vec3 base, float glass){
+      vec2 bay=metres/vec2(2.4,3.3), id=floor(bay), f=fract(bay);
+      vec3 eye=normalize(cameraPosition-world);
+      vec2 slope=vec2(dot(eye.xz,tanAxis),eye.y)/max(.26,abs(dot(eye,normal)));
+      vec2 ray=clamp(-slope*vec2(.56,.42),vec2(-1.7),vec2(1.7));
+      vec2 bound=(mix(vec2(.02),vec2(.98),step(vec2(0.),ray))-f)/(ray+vec2(.0001));
+      float depth=clamp(min(bound.x,bound.y),0.,1.);
+      vec2 sampleAt=clamp(f+depth*ray,vec2(.018),vec2(.982));
+      float floorSeed=windowSeed(vec2(floor(id.x/4.),id.y)),seed=windowSeed(id);
+      vec2 chartCell=vec2(step(.51,seed),step(.55,floorSeed));
+      vec3 room=texture2D(roomChart,(chartCell+sampleAt)*.5).rgb;
+      float blind=step(.72,seed)*step(.48+.35*floorSeed,f.y);
+      float lit=smoothstep(.38,.72,.65*floorSeed+.35*seed);
+      vec3 tint=mix(vec3(.70,.85,1.),vec3(1.08,.85,.57),floorSeed);
+      vec3 panes=base*(.69+.25*pow(1.-abs(dot(eye,normal)),3.))+room*tint*(.19+.62*evening*lit)*(1.-.89*blind);
+      return mix(base,panes,clamp(glass,0.,1.)*(1.-smoothstep(32.,120.,distance(world,cameraPosition))));
+    }`;
   const joinery = new T.TextureLoader().load(templeJoineryUrl);
   joinery.colorSpace = T.SRGBColorSpace;
   joinery.wrapS = joinery.wrapT = T.RepeatWrapping;
@@ -56,9 +81,43 @@ export function buildingFinish(district, evening, height) {
     const sacred = mat.name.startsWith('Temple Facade');
     const tower = mat.name.startsWith('Tower Facade');
     if (mat.map) mat.map.anisotropy = 8;
+    if (mat.name === 'FootTown glazing') {
+      mat.onBeforeCompile = (sh) => {
+        Object.assign(sh.uniforms, { roomChart: { value: rooms }, evening });
+        sh.vertexShader =
+          'varying vec3 ftWorld,ftNormal;\n' +
+          sh.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\nftWorld=(modelMatrix*vec4(transformed,1.)).xyz;ftNormal=mat3(modelMatrix)*normal;',
+          );
+        sh.fragmentShader =
+          roomCode +
+          'varying vec3 ftWorld,ftNormal;\n' +
+          sh.fragmentShader
+            .replace(
+              '#include <map_fragment>',
+              `#include <map_fragment>
+          vec3 N=normalize(ftNormal);vec2 tangent=normalize(vec2(-N.z,N.x)+.0001);
+          vec2 metric=vec2(dot(ftWorld.xz,tangent)*1.22,ftWorld.y);
+          vec3 panes=interior(metric,N,tangent,ftWorld,diffuseColor.rgb+vec3(.035,.050,.050),1.);
+          diffuseColor.rgb=panes;`,
+            )
+            .replace(
+              '#include <emissivemap_fragment>',
+              '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=panes*(.13+.50*evening);',
+            );
+      };
+      mat.customProgramCacheKey = () => 'foottown-room-glass';
+      return;
+    }
     if (plain) {
       mat.onBeforeCompile = (sh) => {
-        Object.assign(sh.uniforms, { evening, gradeGrid: { value: dem }, stoneDetail: { value: baseStone } });
+        Object.assign(sh.uniforms, {
+          roomChart: { value: rooms },
+          evening,
+          gradeGrid: { value: dem },
+          stoneDetail: { value: baseStone },
+        });
         sh.vertexShader =
           'varying vec3 wallXYZ,wallN;\n' +
           sh.vertexShader.replace(
@@ -66,7 +125,8 @@ export function buildingFinish(district, evening, height) {
             '#include <begin_vertex>\nwallXYZ=(modelMatrix*vec4(transformed,1.)).xyz;wallN=mat3(modelMatrix)*normal;',
           );
         sh.fragmentShader =
-          'varying vec3 wallXYZ,wallN;uniform sampler2D stoneDetail;uniform float evening;' +
+          'varying vec3 wallXYZ,wallN;uniform sampler2D stoneDetail;' +
+          roomCode +
           gradeDecl +
           '\n' +
           sh.fragmentShader
@@ -74,6 +134,7 @@ export function buildingFinish(district, evening, height) {
               '#include <map_fragment>',
               `#include <map_fragment>
             vec3 n=normalize(wallN);float wall=1.-smoothstep(.28,.65,abs(n.y));vec2 tangent=normalize(vec2(-n.z,n.x)+.00001);
+            diffuseColor.rgb=interior(vec2(dot(wallXYZ.xz,tangent),wallXYZ.y),n,tangent,wallXYZ,diffuseColor.rgb,wall*smoothstep(.05,.31,(diffuseColor.b-diffuseColor.r)*5.+.08));
             ${plinth}`,
             )
             .replace(
@@ -93,6 +154,7 @@ export function buildingFinish(district, evening, height) {
     if (!detail || !baseStone) return;
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, {
+        roomChart: { value: rooms },
         panes: { value: facadeChart },
         litPanes: { value: windowChart },
         gradeGrid: { value: dem },
@@ -107,8 +169,9 @@ export function buildingFinish(district, evening, height) {
           '#include <begin_vertex>\nwallXYZ=(modelMatrix*vec4(transformed,1.)).xyz;surveyN=mat3(modelMatrix)*normal;styleId=_facade_style;',
         );
       sh.fragmentShader =
+        roomCode +
         gradeDecl +
-        '\nvarying float styleId;varying vec3 wallXYZ,surveyN;uniform sampler2D panes,litPanes,stoneDetail,templeJoinery;uniform float evening;\n' +
+        '\nvarying float styleId;varying vec3 wallXYZ,surveyN;uniform sampler2D panes,litPanes,stoneDetail,templeJoinery;\n' +
         sh.fragmentShader
           .replace(
             '#include <map_fragment>',
@@ -163,13 +226,15 @@ export function buildingFinish(district, evening, height) {
               : `
           vec2 metersPerPixel=vec2(length(dFdx(wallXYZ)),length(dFdy(wallXYZ)));
           vec2 texelsPerPixel=vec2(length(dFdx(vMapUv)),length(dFdy(vMapUv)))*vec2(textureSize(map,0));
-          float density=max(texelsPerPixel.x/max(metersPerPixel.x,.0001),texelsPerPixel.y/max(metersPerPixel.y,.0001));
+          float density=min(texelsPerPixel.x/max(metersPerPixel.x,.0001),texelsPerPixel.y/max(metersPerPixel.y,.0001));
           float lowDensity=1.-smoothstep(11.,38.,density);
           float bay=dot(chart,vec3(.23,.68,.09));
-          vec3 transferred=(.045+.86*photo)*clamp(.49+3.55*bay,.48,1.66);
+          photo=max(photo,vec3(.018,.020,.023));
+          vec3 transferred=(.035+.90*photo)*clamp(.49+3.55*bay,.48,1.66);
           vec3 finished=mix(transferred,chart,.24+.22*lowDensity);
           diffuseColor.rgb=mix(photo,finished,wall*(.34+.45*lowDensity+.18*nearWall));
-          diffuseColor.rgb*=1.+nearWall*(grit-.084)*.86;
+          diffuseColor.rgb*=1.+nearWall*(grit-.084)*.70;
+          diffuseColor.rgb=interior(metric,n,tangent,wallXYZ,diffuseColor.rgb,wall*clamp(.22+(chart.b-chart.r)*4.8,0.,1.));
           ${plinth}`
           }`,
           )
