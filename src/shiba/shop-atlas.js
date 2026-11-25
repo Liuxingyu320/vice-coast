@@ -11,12 +11,33 @@ export const brands = [
   ['芝 大門書房', 'DAIMON BOOKS', '#344e64', '#ece5ce'],
   ['自家焙煎 珈琲', 'COFFEE ROASTERS', '#413b34', '#e5cfaa'],
   ['そば処 江戸路', 'EDOJI  /  SOBA', '#283c45', '#f4e7c8'],
+  ['青山花舗', 'AOYAMA FLOWERS', '#49654f', '#e5e4d3'],
+  ['パン工房 芝', 'SHIBA BAKERY', '#83503c', '#f3dfbf'],
+  ['手打ち うどん', 'TEUCHI UDON', '#364851', '#eee5cb'],
+  ['小野茶舗', 'ONO TEA', '#426050', '#dee2c6'],
+  ['魚よし', 'UOYOSHI', '#365167', '#ebe3cd'],
+  ['和紙 かえで', 'KAEDE PAPER', '#764b49', '#eee4d6'],
+  ['青果 山本', 'YAMAMOTO', '#58764b', '#f2e9ca'],
+  ['芝の洋食屋', 'SHIBA KITCHEN', '#7b4632', '#f1ddae'],
+  ['眼鏡 井上', 'INOUE OPTICAL', '#394b59', '#e0e5df'],
 ];
-const size = 512,
-  cols = 4,
-  rows = 6;
+const size = 384,
+  cols = 8,
+  rows = 8;
 export const atlasGrid = [cols, rows];
-export const cells = { glass: 0, sign: 7, blade: 14, closed: 21, ac: 22, guide: 23 };
+export const cells = {
+  glass: 0,
+  sign: 16,
+  blade: 32,
+  closed: 48,
+  ac: 49,
+  guide: 50,
+  bus: 51,
+  manhole: 52,
+  grille: 53,
+  lobby: 54,
+  lobbySign: 55,
+};
 // Road signs, shelters and fixtures use a second strip below the shop charts.
 export async function makeShopAtlas() {
   const interiors = new Image(),
@@ -24,7 +45,7 @@ export async function makeShopAtlas() {
   room.src = roomURL;
   interiors.src = interiorsURL;
   await Promise.all([interiors.decode(), room.decode()]);
-  return canvasMap(cols * size, (rows + 2) * size, (ctx) => {
+  return canvasMap(cols * size, rows * size, (ctx) => {
     function cell(i, paint) {
       ctx.save();
       ctx.translate((i % cols) * size, Math.floor(i / cols) * size);
@@ -43,13 +64,23 @@ export async function makeShopAtlas() {
       g.textAlign = align;
       g.fillStyle = color;
       g.font = font;
-      g.fillText(s, x, y);
+      g.fillText(s, x, y, 455);
     }
     brands.forEach(([name, en, ink, cream], i) => {
       cell(i, (g) => {
         const w = interiors.width / 2,
           h = interiors.height / 4;
-        g.drawImage(interiors, (i % 2) * w + 2, Math.floor(i / 2) * h + 2, w - 4, h - 4, 0, 0, 512, 512);
+        g.drawImage(
+          interiors,
+          (i % 2) * w + 2,
+          Math.floor((i % 8) / 2) * h + 2,
+          w - 4,
+          h - 4,
+          0,
+          0,
+          512,
+          512,
+        );
         const glass = g.createLinearGradient(0, 0, 160, 512);
         glass.addColorStop(0, 'rgba(142,173,179,.14)');
         glass.addColorStop(0.67, 'rgba(121,150,162,.035)');
@@ -57,7 +88,7 @@ export async function makeShopAtlas() {
         g.fillStyle = glass;
         g.fillRect(0, 0, 512, 512);
       });
-      cell(7 + i, (g) => {
+      cell(cells.sign + i, (g) => {
         rect(g, 0, 0, 512, 512, cream);
         rect(g, 0, 14, 512, 32, ink);
         rect(g, 0, 476, 512, 23, ink);
@@ -69,12 +100,29 @@ export async function makeShopAtlas() {
         text(g, name, 256, 43, 'bold 38px serif', ink);
         text(g, en, 256, 58, 'bold 9px sans-serif', ink);
       });
-      cell(14 + i, (g) => {
+      cell(cells.blade + i, (g) => {
         rect(g, 0, 0, 512, 512, ink);
         g.strokeStyle = cream;
         g.lineWidth = 8;
         g.strokeRect(28, 15, 456, 482);
-        const chars = ['芝マート', '炭火串', '喫茶', '菓子舗', '書房', '珈琲', 'そば'][i].split('');
+        const chars = [
+          '芝マート',
+          '炭火串',
+          '喫茶',
+          '菓子舗',
+          '書房',
+          '珈琲',
+          'そば',
+          '花舗',
+          'パン',
+          'うどん',
+          '茶舗',
+          '魚よし',
+          '和紙',
+          '青果',
+          '洋食',
+          '眼鏡',
+        ][i].split('');
         g.scale(3, 1);
         chars.forEach((c, k) =>
           text(
@@ -88,12 +136,12 @@ export async function makeShopAtlas() {
         );
       });
     });
-    cell(28, (g) => {
+    cell(cells.lobby, (g) => {
       const w = room.width / 2,
         h = room.height / 2;
       g.drawImage(room, 2, 2, w - 4, h - 4, 0, 0, 512, 512);
     });
-    cell(29, (g) => {
+    cell(cells.lobbySign, (g) => {
       rect(g, 0, 0, 512, 512, '#393c39');
       g.scale(1, 6);
       text(g, 'エントランス', 256, 52, '500 40px sans-serif', '#cfc6ac');
@@ -141,7 +189,7 @@ export async function makeShopAtlas() {
       text(g, '● 現在地', 320, 306, 'bold 22px sans-serif', '#a44537');
       text(g, 'TOKYO METROPOLITAN PARK', 256, 462, '20px sans-serif', '#35574a');
     });
-    cell(25, (g) => {
+    cell(cells.bus, (g) => {
       const a = g.createLinearGradient(0, 0, 512, 512);
       a.addColorStop(0, '#314f50');
       a.addColorStop(1, '#c58860');
@@ -156,7 +204,7 @@ export async function makeShopAtlas() {
       text(g, '東京散歩', 256, 331, 'bold 77px serif', '#f6edcc');
       text(g, 'SHIBA  /  MINATO', 256, 397, 'bold 25px sans-serif', '#f7e3b5');
     });
-    cell(26, (g) => {
+    cell(cells.manhole, (g) => {
       g.clearRect(0, 0, 512, 512);
       g.fillStyle = '#384146';
       g.beginPath();
@@ -171,7 +219,7 @@ export async function makeShopAtlas() {
       }
       text(g, '東京', 256, 275, 'bold 60px serif', '#99a098');
     });
-    cell(27, (g) => {
+    cell(cells.grille, (g) => {
       rect(g, 0, 0, 512, 512, '#5c6464');
       for (let j = 0; j < 10; j++) rect(g, 22, j * 50 + 8, 468, 24, '#222d30');
     });

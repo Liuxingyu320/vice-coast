@@ -21,7 +21,7 @@ def build(cache):
     buildings = [
         Polygon(f["rings"][0], f["rings"][1:]).buffer(0) for f in d["footprints"]
     ]
-    solid = sh.union_all(buildings)
+    solid = sh.union_all([*buildings, *[Polygon(p) for p in d["bearingFootprints"]]])
     roads = [
         (LineString(p), i)
         for (k, p), i in zip(d["roads"], d["roadInfo"])
@@ -214,6 +214,7 @@ def build(cache):
     br = pickle.load(open(cache / "viaducts.pkl", "rb"))
     bridgeLights = []
     bridgeAreas = []
+    joints = json.loads((cache / "bridge-joinery.json").read_text())
     for group, fid, name, (v, f, uv, mi) in br:
         if fid.startswith("skyline"):
             continue
@@ -232,6 +233,9 @@ def build(cache):
         if spans.is_empty:
             continue
         bridgeAreas.append((fid, spans.area))
+        if fid in joints:
+            bridgeLights.extend([[fid, *row] for row in joints[fid]["lights"]])
+            continue
         for ix in np.argsort(-np.abs(norm[sel, 2])):
             c = points[ix]
             p = Point(c[:2])
@@ -310,7 +314,9 @@ def build(cache):
         street=streetbuild,
         plantings=plantings,
         drains=drains,
+        sceneryLamps=json.loads((cache / "scenery-lamps.json").read_text()),
         bridgeLights=bridgeLights,
+        bridgeBearings={fid: q["bearings"] for fid, q in joints.items()},
         basinId=BASIN,
     )
     path = ROOT / "assets/shiba-city-detail.json"

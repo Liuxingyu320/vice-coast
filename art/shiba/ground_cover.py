@@ -38,10 +38,12 @@ def build(cache):
 
     for f in data["footprints"]:
         paint(Polygon(f["rings"][0], f["rings"][1:]).buffer(0), base)
+    for rim in data["bearingFootprints"]:
+        paint(Polygon(rim), base)
     paint(parks, mask)
     # Distances in metres: contact darkening at a wall, with a short and a broad penumbra.
     d = distance_transform_edt(np.asarray(base) == 0) / scale
-    ao = 1 - 0.26 * np.exp(-d / 0.85) - 0.13 * np.exp(-d / 4.5)
+    ao = 1 - 0.35 * np.exp(-d / 0.72) - 0.13 * np.exp(-d / 4.5)
     carriageway = Image.new("L", size)
     paint(
         union_all(
@@ -57,7 +59,7 @@ def build(cache):
     kerb_distance = (
         distance_transform_edt(motor) + distance_transform_edt(~motor) - 0.75
     ) / scale
-    ao *= 1.0 - 0.14 * np.exp(-np.maximum(kerb_distance, 0) / 0.47)
+    ao *= 1.0 - 0.25 * np.exp(-np.maximum(kerb_distance, 0) / 0.47)
     for x, y, z, h, r in data["trees"]:
         px = (x - xmin) * scale
         py = (ymin + height - y) * scale
@@ -68,7 +70,11 @@ def build(cache):
         y1 = min(size[1], int(py + radius + 1))
         yy, xx = np.mgrid[y0:y1, x0:x1]
         dist = np.hypot(xx - px, yy - py) / scale
-        ao[y0:y1, x0:x1] *= 1 - 0.27 * np.maximum(1 - dist / (r + 0.1), 0) ** 1.4
+        ao[y0:y1, x0:x1] *= (
+            1
+            - 0.24 * np.exp(-dist / 0.43)
+            - 0.29 * np.maximum(1 - dist / (r + 0.1), 0) ** 1.4
+        )
     pools = np.zeros_like(ao)
     for x, y, z, dx, dy in data["fixtures"]["lamps"]:
         px = (x - dy * 2.85 - xmin) * scale

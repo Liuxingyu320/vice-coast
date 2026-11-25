@@ -9,6 +9,7 @@ import shapely as sh
 from shapely.ops import unary_union
 from shapely.geometry import LineString, Polygon
 from grade import sample
+from verify_repairs import check as check_repairs, panel_bounds
 
 ROOT = Path(__file__).resolve().parents[2]
 assets = ROOT / "assets"
@@ -33,6 +34,9 @@ region = Polygon(data["boundary"])
 buildings = unary_union(
     [Polygon(b["rings"][0], b["rings"][1:]).buffer(0) for b in data["footprints"]]
 )
+buildings = buildings.union(
+    sh.union_all([Polygon(p) for p in data["bearingFootprints"]])
+)
 road = unary_union(
     [
         LineString(pts).buffer(info[0] / 2, quad_segs=12)
@@ -48,6 +52,9 @@ walk = (
     .intersection(region)
 )
 walk = unary_union([p for p in sh.get_parts(walk) if p.geom_type == "Polygon"])
+support = walk.union(
+    sh.union_all([Polygon(r[0], r[1:]) for r in data["entranceLandings"]])
+)
 motor = road.buffer(-EPS)
 outside = road.buffer(EPS)
 outside_walk = walk.buffer(EPS)
@@ -73,7 +80,7 @@ for name in [*paving.nodes, "shiba-ground"]:
             assert deck_water.intersection(road).area > 20
             counts["waterUnderRoadDecksM2"] = round(deck_water.area, 2)
             continue
-        if key == "bank":
+        if key in ("bank", "bank-rail"):
             assert len(f) > 25 and np.isfinite(v).all()
             continue
         z = sample(g, v[:, :2])
@@ -107,19 +114,32 @@ for name in [*paving.nodes, "shiba-ground"]:
                 counts["curbsInsideCarriageway"] = int(intrusion.sum())
             continue
         raised = key in ("sidewalk", "curb", "tactile", "tactileWarn")
+        lift = (
+            0.14 * np.maximum(0.0, 1 - sh.distance(sh.points(v[:, :2]), support) / 1.68)
+            if key == "apron"
+            else 0.14
+            if raised
+            else 0
+        )
         if key == "water":
             levels = np.array([p["z"] for p in data["waters"]])
             assert np.min(abs(v[:, 2, None] - levels), axis=1).max() < EPS
             assert np.ptp(v[f, 2], axis=1).max() < EPS
         else:
-            assert np.max(abs(delta - (0.14 if raised else 0))) < EPS, (
+            assert np.max(abs(delta - lift)) < EPS, (
                 key,
                 "vertex grade",
             )
         tri = v[f]
         mid = tri.mean(1)
         assert key == "water" or (
-            np.max(abs(mid[:, 2] - sample(g, mid[:, :2]) - (0.14 if raised else 0)))
+            np.max(
+                abs(
+                    mid[:, 2]
+                    - sample(g, mid[:, :2])
+                    - (lift[f].mean(1) if key == "apron" else lift)
+                )
+            )
             < EPS
         ), (key, "triangle crossed a DEM crease")
         poly = sh.polygons(tri[:, :, :2])
@@ -234,7 +254,7 @@ for v, f, mat, attrs in district.meshes("building-foundations"):
     minimum = (
         np.minimum.reduce([ground[base], raw[base], high[inverse[base]]]) - v[base, 2]
     )
-    assert len(set(ids[base])) == len(data["footprints"]) == 636
+    assert set(ids[base]) == set(range(len(data["footprints"])))
     assert minimum.min() >= 3.5 - EPS, (minimum.min(), "foundation depth")
     # Midpoints of every bottom segment catch rings that pass above the terrain between corners.
     bottoms = f[base[f].sum(1) == 2]
@@ -251,6 +271,7 @@ for v, f, mat, attrs in district.meshes("building-foundations"):
 
 roof_ids = set()
 chart_set = set()
+panel_measures = []
 envelope = defaultdict(list)
 footprint = defaultdict(list)
 roof_up = defaultdict(float)
@@ -264,6 +285,15 @@ for file, name in [
 ]:
     for v, f, mat, attrs in file.meshes(name):
         file.texture(mat)
+        if mat["name"] in (
+            "Curtain wall",
+            "Ribbon office",
+            "Metal sash",
+            "Porcelain tile",
+            "Park joinery",
+            "Temple joinery",
+        ):
+            panel_measures.append(panel_bounds(file, v, f, mat["name"], attrs))
         if mat["name"] in (
             "Curtain wall",
             "Ribbon office",
@@ -331,7 +361,10 @@ for file, name in [
                 select = valid & (role == role_id)
                 for i in np.unique(owner[select]):
                     target[i].extend(sh.polygons(tri[select & (owner == i), :, :2]))
-assert len(roof_ids) == 634 and len(chart_set) == 4, (len(roof_ids), chart_set)
+assert len(roof_ids) == len(data["footprints"]) - 2 and len(chart_set) == 4, (
+    len(roof_ids),
+    chart_set,
+)
 closed = 0
 uncovered = 0
 for i in roof_ids:
@@ -390,6 +423,8 @@ counts.update(
     mainHallEnvelopeM=np.round(span, 2).tolist(),
     untexturedUrbanMaterials=0,
     facadeFamilies=len(chart_set),
+    minimumMeasuredPanelSillM=round(min(sill for _, sill in panel_measures), 4),
+    maximumWindowAtlasBayDeviation=round(max(error for error, _ in panel_measures), 6),
 )
 
 trees = np.asarray(data["trees"])
@@ -487,6 +522,8 @@ counts.update(check(assets, data, district, paving, road, walk, buildings, regio
 from verify_details import check_daimon_seam
 
 counts.update(check_daimon_seam(data, paving, horizon, region))
+
+counts.update(check_repairs(assets, data, district, paving))
 report = json.dumps(counts, indent=2)
 if path := os.environ.get("SHIBA_GEOMETRY_REPORT"):
     Path(path).parent.mkdir(parents=True, exist_ok=True)

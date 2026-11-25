@@ -29,7 +29,7 @@ def sanctuary(arr, roles, names, grid):
     wall = names.index("Gate plaster")
     ceramic = names.index("Ibushi roof tiles")
     stone = names.index("Kerb granite")
-    glass = names.index("Hall window")
+    door_boards = names.index("Temple timber")
     brass = names.index("Hall gilt")
 
     def face(q, mat, role=2, axis=None):
@@ -178,8 +178,58 @@ def sanctuary(arr, roles, names, grid):
                         span - 0.60,
                         0.102,
                         h - 0.94,
-                        glass,
+                        door_boards,
                     )
+                if level < 20 and abs(k - 3) <= 2:
+                    # Inset washi behind a cedar lattice. The lower kick panels remain dark wood.
+                    box(
+                        x,
+                        side * (depth + 0.365),
+                        level + 2.05,
+                        span - 0.83,
+                        0.044,
+                        h - 2.85,
+                        names.index("Hall window"),
+                    )
+                    box(
+                        x,
+                        side * (depth + 0.44),
+                        level + 0.44,
+                        0.085,
+                        0.11,
+                        h - 0.98,
+                        timber,
+                    )
+                    for sign in [-1, 1]:
+                        box(
+                            x + sign * 0.22,
+                            side * (depth + 0.50),
+                            level + 1.22,
+                            0.075,
+                            0.09,
+                            0.29,
+                            brass,
+                        )
+                    for j in range(-6, 7):
+                        box(
+                            x + j * span / 15,
+                            side * (depth + 0.41),
+                            level + 0.38,
+                            0.095,
+                            0.11,
+                            h - 0.92,
+                            timber,
+                        )
+                    for j in range(1, 5):
+                        box(
+                            x,
+                            side * (depth + 0.42),
+                            level + 0.42 + j * (h - 0.95) / 5,
+                            span - 0.56,
+                            0.10,
+                            0.12,
+                            timber,
+                        )
                 for j in [-1.5, -0.5, 0.5, 1.5]:
                     box(
                         x + j * span / 5,
@@ -254,7 +304,12 @@ def sanctuary(arr, roles, names, grid):
         def rectangle(x0, x1, y0, y1, z):
             return [(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)]
 
-        face(rectangle(left, right, back, near - 0.045, step), stone, 1, [0, 0, 1])
+        face(
+            rectangle(left, right, back, near - 0.045, step),
+            names.index("Stair tread"),
+            1,
+            [0, 0, 1],
+        )
         face(
             rectangle(left, right, near - 0.045, near, step),
             nosing,
@@ -324,3 +379,32 @@ def sanctuary(arr, roles, names, grid):
         "halfWidth": 12.10,
     }
     return new, np.r_[roles, np.asarray(kinds, dtype="u1")], steps
+
+
+def gable_timbers(members, material):
+    v, f, uv = [], [], []
+    for start, end, outward, width in members:
+        a, b = np.asarray(start), np.asarray(end)
+        axis = (b - a) / np.linalg.norm(b - a)
+        depth = np.r_[outward, 0.0]
+        side = np.cross(axis, depth) * width / 2.0
+        rim = [
+            side + depth * 0.067,
+            -side + depth * 0.067,
+            -side - depth * 0.067,
+            side - depth * 0.067,
+        ]
+        first = len(v)
+        v.extend([p + offset for p in [a, b] for offset in rim])
+        uv.extend(
+            [(j / 4, h) for h in [0.0, np.linalg.norm(b - a) / 2] for j in range(4)]
+        )
+        for i in range(4):
+            j = (i + 1) % 4
+            f.extend(
+                [
+                    [first + i, first + j, first + j + 4],
+                    [first + i, first + j + 4, first + i + 4],
+                ]
+            )
+    return np.float32(v), np.int32(f), np.float32(uv), np.full(len(f), material, "i2")

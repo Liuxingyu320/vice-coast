@@ -81,7 +81,16 @@ export function createTrees(scene, district, trees) {
     const rows = [];
     trees.forEach(([x, y, z, height, radius], i) => {
       if ((i % 11 < 6 ? 0 : i % 11 < 9 ? 1 : 2) !== kind) return;
-      rows.push([x, z, -y, radius, height, radius, i * 2.399963]);
+      const phase = Math.sin(12.9898 * x + 78.233 * y);
+      rows.push([
+        x,
+        z,
+        -y,
+        radius * ([0.94, 1.0, 0.95][kind] + 0.09 * phase),
+        height,
+        radius * ([0.91, 0.94, 0.95][kind] - 0.095 * phase),
+        i * 2.399963 + phase,
+      ]);
     });
     const meshes = [],
       bounds = new T.Box3().setFromObject(prototype);
@@ -103,23 +112,36 @@ export function createTrees(scene, district, trees) {
         mat.emissiveIntensity = 0.28;
         mat.onBeforeCompile = (sh) => {
           // Leaf cards share a crown normal even when seen from behind.
-          sh.vertexShader = sh.vertexShader.replace(
-            '#include <beginnormal_vertex>',
-            '#include <beginnormal_vertex>\nobjectNormal=normalize(vec3(position.x,(position.y-.55)*6.0+.25,position.z));',
-          );
-          sh.fragmentShader = sh.fragmentShader
-            .replace(
-              '#include <emissivemap_fragment>',
-              '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*(.085+.09*pow(1.-abs(dot(normal,normalize(vViewPosition))),2.));',
-            )
-            .replace(
-              '#include <normal_fragment_begin>',
-              T.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''),
-            )
-            .replace(
-              '#include <lights_physical_fragment>',
-              '#include <lights_physical_fragment>\nmaterial.specularColor*=.07;material.specularF90=.026;',
-            );
+          sh.vertexShader =
+            'varying float leafTone;\n' +
+            sh.vertexShader
+              .replace(
+                '#include <begin_vertex>',
+                '#include <begin_vertex>\nleafTone=fract(sin(dot(instanceMatrix[3].xz,vec2(.741,.318)))*4375.13);',
+              )
+              .replace(
+                '#include <beginnormal_vertex>',
+                '#include <beginnormal_vertex>\nobjectNormal=normalize(vec3(position.x,(position.y-.55)*6.0+.25,position.z));',
+              );
+          sh.fragmentShader =
+            'varying float leafTone;\n' +
+            sh.fragmentShader
+              .replace(
+                '#include <map_fragment>',
+                '#include <map_fragment>\ndiffuseColor.rgb*=mix(vec3(.66,.89,.78),vec3(1.13,1.01,.69),leafTone);',
+              )
+              .replace(
+                '#include <emissivemap_fragment>',
+                '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*(.085+.09*pow(1.-abs(dot(normal,normalize(vViewPosition))),2.));',
+              )
+              .replace(
+                '#include <normal_fragment_begin>',
+                T.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''),
+              )
+              .replace(
+                '#include <lights_physical_fragment>',
+                '#include <lights_physical_fragment>\nmaterial.specularColor*=.07;material.specularF90=.026;',
+              );
         };
       }
       meshes.push(

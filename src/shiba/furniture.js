@@ -1,8 +1,11 @@
 import * as T from 'three';
+import city from '../../assets/shiba-city-detail.json';
 import { instances, canvasMap } from './primitives.js';
 export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   const steel = [],
     poles = [],
+    outerPoles = [],
+    sweptArms = [],
     shoes = [],
     rail = [],
     white = [],
@@ -22,18 +25,32 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   for (const [index, [x, y, g, dx, dy]] of data.fixtures.signals.entries()) {
     const yaw = -Math.atan2(dx, dy),
       reach = 4.55;
-    pole(shoes, x, y, g, 0.055, 0.26);
-    pole(poles, x, y, g, 5.3, 0.145);
+    pole(shoes, x, y, g, 0.09, 0.35);
+    pole(poles, x, y, g, 5.3, 0.17);
     put(steel, x - (dy * reach) / 2, y + (dx * reach) / 2, g + 5.2, reach + 0.26, 0.13, 0.13, yaw);
     const bx = x - dy * reach,
       by = y + dx * reach;
     put(heads, bx, by, g + 4.99, 1.5, 0.46, 0.31, yaw);
     const phaseGroup = Math.abs(dx) > Math.abs(dy) ? 0 : 3;
     for (let k = 0; k < 3; k++) {
-      const px = bx + dy * (k - 1) * 0.45,
-        py = by - dx * (k - 1) * 0.45;
-      put(beads[k + phaseGroup], px - dx * 0.183, py - dy * 0.183, g + 4.99, 0.286, 0.286, 0.07, yaw);
-      put(hoods, px - dx * 0.25, py - dy * 0.25, g + 5.005, 0.346, 0.346, 0.24, yaw);
+      // Paired approach heads share a back plate. Each approach sees an unobscured front lens.
+      for (const side of [-1, 1]) {
+        const faceYaw = yaw + (side === 1 ? Math.PI : 0);
+        const lane = side === -1 ? k : 2 - k;
+        const lx = bx + dy * (lane - 1) * 0.45,
+          ly = by - dx * (lane - 1) * 0.45;
+        put(
+          beads[k + phaseGroup],
+          lx + side * dx * 0.202,
+          ly + side * dy * 0.202,
+          g + 4.99,
+          0.32,
+          0.32,
+          0.065,
+          faceYaw,
+        );
+        put(hoods, lx + side * dx * 0.27, ly + side * dy * 0.27, g + 5.035, 0.37, 0.36, 0.19, faceYaw);
+      }
     }
     const title = data.fixtures.junctionNames[index];
     if (title) {
@@ -41,18 +58,25 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
       put(signs.get(title), x - dy * 1.65, y + dx * 1.65, g + 4.91, 1.44, 0.42, 0.08, yaw);
     }
   }
-  for (const [x, y, g, dx, dy] of data.fixtures.lamps) {
-    const a = Math.atan2(dx, dy),
-      reach = 2.85;
-    pole(shoes, x, y, g, 0.045, 0.2);
-    pole(poles, x, y, g, 6.25, 0.11);
-    put(steel, x - (dy * reach) / 2, y + (dx * reach) / 2, g + 6.16, reach + 0.1, 0.085, 0.09, -a);
-    const hx = x - dy * reach,
-      hy = y + dx * reach;
-    put(dark, hx, hy, g + 6.12, 0.61, 0.1, 0.31, -a);
-    put(lamp, hx, hy, g + 6.055, 0.51, 0.035, 0.25, -a);
-    glowPositions.push(hx, g + 6.02, -hy);
-    cones.push([hx, g + 3.09, -hy, 4.7, 5.85, 4.7]);
+  for (const [rows, sites] of [
+    [poles, data.fixtures.lamps],
+    [outerPoles, city.sceneryLamps],
+  ]) {
+    for (const [x, y, g, dx, dy] of sites) {
+      const yaw = -Math.atan2(dx, dy),
+        reach = 2.85;
+      pole(shoes, x, y, g, 0.09, 0.32);
+      pole(rows, x, y, g, 5.84, 0.16);
+      put(sweptArms, x, y, g, 1, 1, 1, yaw);
+      const hx = x - dy * reach,
+        hy = y + dx * reach;
+      put(dark, hx, hy, g + 6.12, 0.64, 0.1, 0.3, yaw);
+      put(lamp, hx, hy, g + 6.052, 0.54, 0.036, 0.25, yaw);
+      if (rows === poles) {
+        glowPositions.push(hx, g + 6.02, -hy);
+        cones.push([hx, g + 3.09, -hy, 4.7, 5.85, 4.7]);
+      }
+    }
   }
   for (const anchors of data.fixtures.rails) {
     for (const [x, y, g] of anchors) {
@@ -121,7 +145,18 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   const tube = new T.CylinderGeometry(0.5, 0.5, 1, 12);
   const galv = std('#929b99', 0.38);
   instances(scene, 'Mast base plates', tube, std('#555e60', 0.32), shoes);
-  instances(scene, 'Signal and lamp masts', tube, galv, poles, true);
+  const mast = new T.CylinderGeometry(0.34, 0.56, 1, 10);
+  instances(scene, 'Signal and lamp masts', mast, galv, poles, true);
+  instances(scene, 'Scenery lamp masts', mast, galv, outerPoles);
+  // Local -X points from the kerb over the carriageway in the fixture frame.
+  const bend = new T.CatmullRomCurve3([
+    new T.Vector3(0, 5.76, 0),
+    new T.Vector3(-0.13, 6.04, 0),
+    new T.Vector3(-0.52, 6.22, 0),
+    new T.Vector3(-1.47, 6.26, 0),
+    new T.Vector3(-2.85, 6.17, 0),
+  ]);
+  instances(scene, 'Swept metal lamp arms', new T.TubeGeometry(bend, 8, 0.053, 7, false), galv, sweptArms);
   instances(scene, 'Signal and lamp arms', box, galv, steel);
   const visor = new T.CylinderGeometry(0.5, 0.5, 1, 16, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
   const hoodMat = std('#303937');
@@ -153,13 +188,13 @@ export function buildFurniture(scene, streets, terrain, data, glow, passable) {
   instances(scene, 'Lamp housings', box, std('#333e3d'), dark);
   const lit = new T.MeshStandardMaterial({ color: '#f1dbad', emissive: '#ffbb65' });
   instances(scene, 'Lanterns & reflectors', box, lit, lamp);
-  const lensColor = ['#3bd7b0', '#f8c04f', '#f4483f'].map((c) => new T.Color(c));
-  const unlit = ['#253933', '#3e3628', '#422a2a'].map((c) => new T.Color(c));
+  const lensColor = ['#00b978', '#e99c00', '#dd2415'].map((c) => new T.Color(c));
+  const unlit = ['#375e53', '#695438', '#643b38'].map((c) => new T.Color(c));
   const lensMat = new T.MeshStandardMaterial({ roughness: 0.32 });
   lensMat.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vColor*mix(.012,1.36,step(.14,max(vColor.r,max(vColor.g,vColor.b))));',
+      '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vColor*mix(.04,.92,step(.24,max(vColor.r,max(vColor.g,vColor.b))));',
     );
   };
   const lenses = instances(scene, 'Signal bulbs', new T.SphereGeometry(0.5, 12, 8), lensMat, beads.flat());

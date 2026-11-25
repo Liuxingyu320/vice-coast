@@ -36,6 +36,8 @@ def blocks_for_site(path, data, aerial, names):
         level = 0.14 if key in ("sidewalk", "curb", "tactile", "tactileWarn") else 0.0
         z = sample(grid, xy) + level
         uv = xy / METRES.get(key, 1.0)
+        if key == "apron":
+            z += np.asarray(pack["apronLift"])
         if key == "water":
             # Each disconnected pond or river reach uses one horizontal water table.
             # An earcut partition can share a vertex between reaches only along a continuous surface.

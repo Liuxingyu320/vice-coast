@@ -21,6 +21,7 @@ def build(cache):
     buildings = union_all(
         [Polygon(f["rings"][0], f["rings"][1:]).buffer(0) for f in d["footprints"]]
     )
+    buildings = buildings.union(union_all([Polygon(p) for p in d["bearingFootprints"]]))
     roads = [
         (LineString(p), i[0])
         for (k, p), i in zip(d["roads"], d["roadInfo"])
@@ -148,32 +149,9 @@ def build(cache):
             ((np.linalg.norm(xy - head), title) for xy, title in named),
             default=(np.inf, ""),
         )
-        f["junctionNames"].append(title if distance < 27 else "")
-    osm_nodes = {
-        p.get("id"): en(float(p.get("lat")), float(p.get("lon")))
-        for p in osm.iterfind("node")
-    }
-    precinct = []
-    for way in osm.iterfind("way"):
-        tags = {tag.get("k"): tag.get("v") for tag in way.iterfind("tag")}
-        if tags.get("name") == "増上寺" and tags.get("amenity") == "place_of_worship":
-            precinct.append(
-                Polygon(
-                    [
-                        osm_nodes[q.get("ref")]
-                        for q in way.iterfind("nd")
-                        if q.get("ref") in osm_nodes
-                    ]
-                ).buffer(0)
-            )
-    sacred = union_all(precinct)
-    d["templePrecinctIds"] = [
-        b["id"]
-        for b in d["footprints"]
-        if sacred.covers(
-            Polygon(b["rings"][0], b["rings"][1:]).buffer(0).representative_point()
+        f["junctionNames"].append(
+            title if distance < 50 else ("芝公園" if x < 430 else "芝大門")
         )
-    ]
     f["guideFaces"] = guide_signs(d)
     f["amenities"] = items
     path.write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")) + "\n")

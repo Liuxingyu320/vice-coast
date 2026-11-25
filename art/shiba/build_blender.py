@@ -28,7 +28,14 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 blocks, names = pickle.load(open(CACHE / "meshes.pkl", "rb"))
 layout = json.loads((DEST / "shiba-layout.json").read_text())
-blocks = [b for b in blocks if b[1] != "shiba-ground"]
+excluded = set(layout["excludedSurveyBuildings"])
+blocks = [
+    b
+    for b in blocks
+    if b[1] != "shiba-ground" and not (b[0] == "Building" and b[1] in excluded)
+]
+wall_charts = pickle.load(open(CACHE / "wall-charts.pkl", "rb"))
+wall_fields = {}
 surface_roles = pickle.load(open(CACHE / "roof-flags.pkl", "rb"))
 bridges, backdrop = pickle.load(open(CACHE / "context.pkl", "rb"))
 bridges = pickle.load(open(CACHE / "viaducts.pkl", "rb"))
@@ -41,21 +48,30 @@ for group, fid, title, arr in bridges:
     if fid != "skyline-viaduct":
         pier_tips.extend([[fid, *p] for p in buried])
 (CACHE / "bridge-bases.json").write_text(json.dumps(pier_tips))
-blocks.extend(backdrop)
+skyline, skyline_detail = pickle.load(open(CACHE / "skyline-walls.pkl", "rb"))
+blocks.extend(
+    (group, fid, label, skyline if fid == "surveyed-skyline" else arr)
+    for group, fid, label, arr in backdrop
+)
 pages, facades, far_ground = pickle.load(open(CACHE / "context/detailed.pkl", "rb"))
 far_ground, horizon = pickle.load(open(CACHE / "horizon-grade.pkl", "rb"))
 sky_mat = len(names)
 names.append("Backdrop ortho")
 names.extend(f"Backdrop facade {k:02}" for k in range(pages))
 for fid, title, arr in [
-    ("skyline-photofacades", "街区周辺 · 実写立面", facades),
+    ("skyline-photofacades", "街区周辺 · 実写立面", skyline_detail),
     ("skyline-ground", "街区周辺 · 航空写真", far_ground),
 ]:
     v, f, uv, mi = arr
     mi = np.where(mi >= 2, mi + sky_mat - 2, mi)
     blocks.append(("Backdrop", fid, title, (v, f, uv, mi)))
 blocks.append(
-    ("Tower", "tower-lattice", "東京タワー · 鉄骨と展望台", make_tower(names))
+    (
+        "Tower",
+        "tower-lattice",
+        "東京タワー · 鉄骨と展望台",
+        make_tower(names, layout["height"]),
+    )
 )
 
 
@@ -71,6 +87,12 @@ gate_ids = {
 supports, gate_bases, facade_styles = {}, {}, {}
 for key in [
     *FACADE,
+    "Park joinery",
+    "Park door",
+    "Temple timber",
+    "Temple joinery",
+    "Wall render",
+    "Stair tread",
     "Basalt shop base",
     "Roof membrane",
     "Bridge concrete",
@@ -95,7 +117,25 @@ tower_id = "bldg_7aff4a51-be8b-405b-abe4-ac489697cbc8"
 from passages import open_drive
 
 passages = json.loads((CACHE / "passages.json").read_text())
+from foundations import park_level, seat_park
+
+park_ids = (
+    set(layout["parkBuildingIds"])
+    - set(layout["templePrecinctIds"])
+    - set(layout["verifiedBuildings"].values())
+    - {DAIMON_A6, SHIBA_A3, BASIN}
+    - set(passages)
+)
+grid = dict(layout["height"])
+grid["gradeCm"] = np.asarray(grid["gradeCm"])
+levels = {
+    feat["id"]: park_level(grid, feat["rings"])
+    for feat in layout["footprints"]
+    if feat["id"] in park_ids
+}
 for i, (group, fid, label, arr) in enumerate(list(blocks)):
+    if group == "Building" and fid in levels:
+        arr = seat_park(arr, surface_roles[fid], levels[fid])
     v, f, uv, mi = arr
     if group == "Building" and fid in gate_ids:
         reconstructed, supports[fid] = make_gate(
@@ -111,6 +151,8 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
     if group == "Bridge":
         new[mi == 1] = names.index("Bridge concrete")
         new[mi == 0] = names.index("Viaduct deck")
+        new[mi == 2] = names.index("FootTown frame")
+        new[mi == 3] = names.index("Basalt shop base")
     else:
         tri = v[f]
         n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
@@ -141,22 +183,38 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
         new = np.where(blank & vertical, city_materials[style], new)
         new[(blank & ~vertical) | (mi == 2)] = names.index("Roof membrane")
         worship = (
-            fid == temple or (fid in layout["templePrecinctIds"] and h < 24)
+            fid == temple or fid in layout["templePrecinctIds"]
             if group == "Building"
             else False
         )
-        if worship or fid == tower_id:
+        if worship:
+            kinds = surface_roles[fid][f[:, 0]]
+            new[:] = names.index("Gate plaster")
+            new[kinds == 1] = names.index("Ibushi roof tiles")
+            if fid in wall_charts and fid not in passages:
+                chart, fit, datum, wall = wall_charts[fid]
+                uv = chart
+                new[wall] = names.index("Temple joinery")
+                wall_fields[fid] = fit, datum
+        elif fid == tower_id:
             for m in np.unique(mi):
-                if not names[m].startswith("Facade "):
-                    continue
-                prefix = "Temple " if worship else "Tower "
-                key = prefix + names[m]
-                if key not in names:
-                    names.append(key)
-                new[mi == m] = names.index(key)
-            if worship:
-                new[blank & vertical] = names.index("Gate plaster")
-                new[(blank & ~vertical) | (mi == 2)] = names.index("Ibushi roof tiles")
+                if names[m].startswith("Facade "):
+                    key = "Tower " + names[m]
+                    if key not in names:
+                        names.append(key)
+                    new[mi == m] = names.index(key)
+        elif fid in wall_charts and fid not in passages:
+            chart, fit, datum, wall = wall_charts[fid]
+            uv = chart
+            new[:] = names.index("Roof membrane")
+            new[vertical] = names.index("Wall render")
+            idx = (
+                names.index("Park joinery")
+                if fid in layout["parkBuildingIds"]
+                else city_materials[style]
+            )
+            new[wall] = np.broadcast_to(idx, new.shape)[wall]
+            wall_fields[fid] = (fit, datum)
     updated = (v, f, uv, new.astype("i2"))
     if group == "Building" and fid in (DAIMON_A6, SHIBA_A3, BASIN):
         blocks.append(("Reference", fid, label + " · 測量外殻", arr))
@@ -173,6 +231,13 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
         updated, surface_roles[fid], stairs = sanctuary(
             updated, surface_roles[fid], names, layout["height"]
         )
+        if fid in wall_fields:
+            fit, datum = wall_fields[fid]
+            extra = len(updated[0]) - len(v)
+            wall_fields[fid] = (
+                np.pad(fit, ((0, extra), (0, 0)), constant_values=-2),
+                np.pad(datum, (0, extra)),
+            )
         (DEST / "shiba-hall-steps.json").write_text(
             json.dumps(stairs, separators=(",", ":")) + "\n"
         )
@@ -185,6 +250,18 @@ for i, (group, fid, label, arr) in enumerate(list(blocks)):
             names.index("Bridge concrete"),
             layout["height"],
         )
+        v, f, _, mi = updated
+        chart, fit, datum, wall = wall_charts[fid]
+        mi[:] = names.index("Roof membrane")
+        mi[wall] = (
+            names.index("Temple joinery")
+            if fid in layout["templePrecinctIds"]
+            else names.index("Park joinery")
+            if fid in layout["parkBuildingIds"]
+            else city_materials[style]
+        )
+        updated = v, f, chart, mi
+        wall_fields[fid] = fit, datum
         facade_styles[fid] = np.full(len(updated[0]), style, "f4")
     blocks[i] = (group, fid, label, updated)
 (DEST / "shiba-gate-supports.json").write_text(
@@ -194,6 +271,38 @@ foundations, foundation_owners = foundation_mesh(
     CACHE, layout, supports, gate_bases, foundation_index
 )
 blocks.append(("Terrain", "building-foundations", "建物 · 接地基礎", foundations))
+# Detached infill is batched for drawing, but every endpoint is fitted to a measured gable.
+from main_hall import gable_timbers
+
+blocks.append(
+    (
+        "Terrain",
+        "precinct-timber",
+        "増上寺 · 妻梁と束",
+        gable_timbers(
+            json.loads((CACHE / "gable-timber.json").read_text()),
+            names.index("Gate timber"),
+        ),
+    )
+)
+doors = np.asarray(json.loads((CACHE / "park-doors.json").read_text()), "f4")
+if len(doors):
+    faces = (
+        np.arange(len(doors))[:, None, None] * 4 + np.array([[0, 1, 2], [0, 2, 3]])
+    ).reshape(-1, 3)
+    blocks.append(
+        (
+            "Terrain",
+            "community-entrances",
+            "公園施設 · 木製扉",
+            (
+                doors.reshape(-1, 3),
+                faces,
+                np.tile([[0, 0], [1, 0], [1, 1], [0, 1]], (len(doors), 1)),
+                np.full(len(faces), names.index("Park door"), "i2"),
+            ),
+        )
+    )
 blocks.extend(
     blocks_for_site(
         DEST / "shiba-pavement.gz",
@@ -214,7 +323,11 @@ for k, (v, f, uv, _) in pickle.load(open(CACHE / "edge-streets.pkl", "rb")).item
         )
     )
 for key, (v, f, uv, _) in pickle.load(open(CACHE / "river-joinery.pkl", "rb")).items():
-    material = SURFACE["water" if key == "channel" else "bank"]
+    material = (
+        "FootTown frame"
+        if key == "bank-rail"
+        else SURFACE["water" if key == "channel" else "bank"]
+    )
     if material not in names:
         names.append(material)
     blocks.append(
@@ -384,6 +497,12 @@ def make(name, arr, collection, center=True, attributes=None, radial=None, weld=
     # Vertical façades retain exactly 3.3 m per storey regardless of heading or triangle aspect.
     for mat_id in used:
         mat_name = names[mat_id]
+        if (
+            mat_name in (*FACADE, "Park joinery", "Temple joinery")
+            and attributes
+            and "_PANEL_U" in attributes
+        ):
+            continue  # Authored wall-local UVs already start and end at whole bays.
         if mat_name not in (
             *FACADE,
             "Foundation concrete",
@@ -393,6 +512,8 @@ def make(name, arr, collection, center=True, attributes=None, radial=None, weld=
             "Gate vermilion",
             "Gate plaster",
             "Gate painted concrete",
+            "Wall render",
+            "Temple joinery",
             "Bridge concrete",
         ):
             continue
@@ -408,6 +529,8 @@ def make(name, arr, collection, center=True, attributes=None, radial=None, weld=
         scale = (
             (19.2, 26.4)
             if mat_name in FACADE
+            else (7.2, 3.3)
+            if mat_name == "Temple joinery"
             else (2.4, 2.4)
             if mat_name != "Ibushi roof tiles"
             else (1.6, 1.12)
@@ -423,8 +546,10 @@ def make(name, arr, collection, center=True, attributes=None, radial=None, weld=
     )
     if attributes:
         for key, values in attributes.items():
-            attribute = me.attributes.new(key, "FLOAT", "POINT")
-            attribute.data.foreach_set("value", np.ascontiguousarray(values, "f4"))
+            domain = "CORNER" if weld else "POINT"
+            attribute = me.attributes.new(key, "FLOAT", domain)
+            data = values[f].ravel() if weld else values
+            attribute.data.foreach_set("value", np.ascontiguousarray(data, "f4"))
     if name.startswith("paving-") or name == "shiba-ground" or radial is not None:
         me.polygons.foreach_set("use_smooth", np.ones(len(f), bool))
     me.update(calc_edges=True)
@@ -448,6 +573,10 @@ groups = {
 }
 native_finishes = {}
 for group, fid, label, arr in blocks:
+    attrs = {}
+    if fid in wall_fields and group != "Reference":
+        fit, base = wall_fields[fid]
+        attrs = {"_PANEL_U": fit[:, 0], "_PANEL_V": fit[:, 1], "_PLINTH": base}
     ob = make(
         (
             "原型 · "
@@ -462,6 +591,7 @@ for group, fid, label, arr in blocks:
         arr,
         coll(groups["Backdrop"] if fid == "skyline-viaduct" else groups[group]),
         center=group != "Prototype",
+        attributes=attrs,
         weld=group
         in ("Building", "Bridge", "Backdrop", "Reference", "Tower", "Terrain"),
         radial=tree_models.get(fid),
@@ -482,8 +612,9 @@ for k, (x, y, z, h, r) in enumerate(layout["trees"]):
     tree = bpy.data.objects.new("樹木 %03d" % k, prototype_ob.data)
     coll(groups["Landscape"]).objects.link(tree)
     tree.location = (x, y, z)
-    tree.scale = (r, r, h)
-    tree.rotation_euler.z = k * 2.399963
+    phase = math.sin(12.9898 * x + 78.233 * y)
+    tree.scale = (r * (0.91 + 0.09 * phase), r * (0.90 - 0.095 * phase), h)
+    tree.rotation_euler.z = k * 2.399963 + phase
 proto_collection.hide_render = True
 proto_collection.hide_viewport = True
 laser = np.load(CACHE / "tower-laser.npy")
@@ -619,7 +750,13 @@ for k, parts in batches.items():
     ii = []
     off = 0
     id_arrays, roof_arrays, style_arrays = [], [], []
+    fits, bases = [], []
+    has_walls = any(fid in wall_fields for fid, _ in parts)
     for fid, (v, f, uv, mi) in parts:
+        if has_walls:
+            fit, base = wall_fields.get(fid, (None, None))
+            fits.append(fit if fit is not None else np.full((len(v), 2), -2, "f4"))
+            bases.append(base if base is not None else np.zeros(len(v), "f4"))
         if fid in facade_styles:
             style_arrays.append(facade_styles[fid])
         if fid in owners:
@@ -639,6 +776,15 @@ for k, parts in batches.items():
             coll("Runtime only"),
             False,
             {
+                **(
+                    {
+                        "_PANEL_U": np.concatenate(fits)[:, 0],
+                        "_PANEL_V": np.concatenate(fits)[:, 1],
+                        "_PLINTH": np.concatenate(bases),
+                    }
+                    if has_walls
+                    else {}
+                ),
                 **(
                     {
                         "_FEATURE_ID": np.concatenate(id_arrays),

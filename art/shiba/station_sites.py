@@ -23,6 +23,13 @@ def bounds_rect(origin, direction, x0, x1, y0, y1):
     )
 
 
+def station_envelope(station, clearance=0):
+    half = station["width"] / 2 + 0.21
+    return bounds_rect(
+        station["mouth"], station["down"], -half, half, -0.25, station["length"] + 0.18
+    ).buffer(clearance)
+
+
 def station_sites(cache, data):
     from shapely import Polygon
     from shiba_site import en

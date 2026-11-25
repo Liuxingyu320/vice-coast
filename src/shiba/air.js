@@ -31,7 +31,7 @@ export function installAir(scene, sky) {
             float h0=clamp(cameraPosition.y/185.,-1.,8.), dh=clamp(airRay.y/185.,-8.,8.);
             float integral=exp(-h0)*(abs(dh)<.025?1.-.5*dh:(1.-exp(-dh))/dh);
             float airThickness=travel*fogDensity*(.40+.84*clamp(integral,0.,1.7));
-            float haze=1.-exp(-airThickness*airThickness*.92);
+            float haze=1.-exp(-airThickness*airThickness*(.92+.42*smoothstep(140.,650.,travel)));
             float cosSun=max(0.,dot(heading,airSun));
             float mie=.055/pow(max(.095,1.5329-1.46*cosSun),1.45);
             vec3 fogTint=mix(fogColor,mix(fogColor,airTint,.62),clamp(mie,0.,.62)*(1.-airNight));

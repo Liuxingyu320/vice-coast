@@ -41,6 +41,8 @@ def plan(cache, data):
     roles = pickle.load(open(cache / "roof-flags.pkl", "rb"))
     exclude = (
         set(data["templePrecinctIds"])
+        | set(data["parkBuildingIds"])
+        | set(data["excludedSurveyBuildings"])
         | set(data["verifiedBuildings"].values())
         | {TOWER, BASIN, DAIMON_A6, SHIBA_A3}
     )
@@ -52,7 +54,7 @@ def plan(cache, data):
     tops = {
         owners[fid]: float(v[:, 2].max())
         for group, fid, _, (v, _, _, _) in blocks
-        if group == "Building"
+        if group == "Building" and fid in owners
     }
     rows = []
     roof_count = 0

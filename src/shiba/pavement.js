@@ -58,8 +58,8 @@ export function finishPavement(district, data, evening) {
       m.metalness = 0;
       m.envMapIntensity = 0.72;
       m.bumpMap = m.map;
-      m.bumpScale = 0.004;
-      m.emissive.setRGB(0.013, 0.016, 0.021);
+      m.bumpScale = 0.014;
+      m.emissive.setRGB(0.018, 0.021, 0.027);
       m.emissiveIntensity = 0.55;
     } else if (paint) {
       m.emissive.copy(m.color);
@@ -100,8 +100,9 @@ export function finishPavement(district, data, evening) {
         ${
           asphalt
             ? `vec3 wear=texture2D(roadWear,mapEN).rgb;
-          diffuseColor.rgb*=1.30+.26*(wear.g-.5)-.09*wear.r;
-          diffuseColor.rgb+=vec3(.0052,.0056,.0060)*(.45+.48*wear.g);`
+          float chips=texture2D(map,siteEN*.91+vec2(.17,-.23)).g;
+          diffuseColor.rgb*=1.12+.35*(wear.g-.5)-.13*wear.r;
+          diffuseColor.rgb+=vec3(.013,.015,.018)*(.57+7.*chips);`
             : ''
         }
         ${
@@ -113,6 +114,7 @@ export function finishPavement(district, data, evening) {
           vec3 fabric=mix(mix(grainMap(2.,siteEN/1.48),grainMap(1.,siteEN/1.96),dirt),grainMap(0.,siteEN/1.65),grass);
           float distanceToViewer=length(siteEN-vec2(cameraPosition.x,-cameraPosition.z));
           float strength=.94*(1.-smoothstep(30.,220.,distanceToViewer));
+          ${o.name === 'skyline-ground' ? 'ortho=mix(vec3(dot(ortho,vec3(.22,.69,.09))),ortho,.38); strength=max(strength,.38*(1.-smoothstep(200.,680.,distanceToViewer)));' : ''}
           diffuseColor.rgb=mix(ortho,fabric*(.75+.55*smoothstep(.015,.45,dot(ortho,vec3(.21,.72,.07)))),strength);`
             : ''
         }
@@ -121,6 +123,7 @@ export function finishPavement(district, data, evening) {
           .replace(
             '#include <emissivemap_fragment>',
             `#include <emissivemap_fragment>
+          ${asphalt ? 'totalEmissiveRadiance+=evening*diffuseColor.rgb*(.09+.27*clamp(chips*12.,0.,1.));' : ''}
           float slant=1.-clamp(abs(dot(normalize(vViewPosition),normal)),0.,1.);
           totalEmissiveRadiance+=evening*(pool*pool*vec3(.32,.30,.27)*(.72+.36*slant)+land.b*vec3(.042,.032,.020));`,
           )
@@ -130,7 +133,7 @@ export function finishPavement(district, data, evening) {
           ${
             asphalt
               ? `vec2 macro=vMapUv*.43;float field=.50+.22*sin(macro.x+.57*sin(macro.y))+.17*cos(macro.y*.61-macro.x*.43)+.11*sin(macro.y*.53+macro.x*.81);
-          roughnessFactor=clamp(.45+.40*(field*.55+wear.g*.45)-.06*wear.r-.10*evening*wear.b,.40,.85);`
+          roughnessFactor=clamp(.56+.32*(field*.55+wear.g*.45)-.06*wear.r-.055*evening*wear.b,.48,.85);`
               : ''
           }`,
           )

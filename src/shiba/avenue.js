@@ -3,7 +3,7 @@ import frontages from '../../assets/shiba-frontages.json';
 import { instances, canvasMap } from './primitives.js';
 import { addUnderstory } from './understory.js';
 import { buildCityDetail } from './city-detail.js';
-import { makeShopAtlas, brands, cells } from './shop-atlas.js';
+import { makeShopAtlas, brands, cells, atlasGrid } from './shop-atlas.js';
 
 // A placement frame has local X along a frontage and local Z facing the street.
 export async function furnishAvenue(scene, streets, ground, passable, fixtures) {
@@ -42,7 +42,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
   // Each repeated bay is mounted to a surveyed wall normal; the parapet and jambs conceal the photo at grade.
   for (const [i, [x, y, nx, ny, width, seed, owner, lobby]] of frontages.entries()) {
     const o = loc(x, y, nx, ny),
-      kind = (seed + Math.floor(i / 2) * 3) % brands.length,
+      kind = seed,
       ink = brands[kind][2],
       w = Math.min(width, 9.8),
       closed = !lobby && i % 13 === 8;
@@ -54,7 +54,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     o.z = Math.max(...edgeLevels) + 0.14;
     const foundationDepth = o.z - bottom;
     box(o, 0, 0.18, -foundationDepth / 2, w, foundationDepth, 0.36, '#59605e');
-    box(o, 0, 0.12, 1.88, w, 3.76, 0.2, '#3f4542');
+    box(o, 0, 0.065, 1.88, w, 3.76, 0.31, '#3f4542');
     face(
       o,
       0,
@@ -62,7 +62,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
       1.57,
       w - 0.2,
       2.88,
-      closed ? cells.closed : lobby ? 28 : kind,
+      closed ? cells.closed : lobby ? cells.lobby : kind,
       closed ? 0.02 : lobby ? 0.23 : 0.31,
     );
     // Physical reveals and door hardware stay in front of recessed interior glazing.
@@ -77,7 +77,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     box(o, 0, 0.28, 0.12, w, 0.24, 0.24, '#626761');
     for (const u of [-w * 0.49, -w * 0.16, w * 0.49]) box(o, u, 0.3, 1.6, 0.072, 2.96, 0.12, '#7c8785');
     box(o, 0, 0.33, 3.37, w, 0.72, 0.3, '#4c514c');
-    face(o, 0, 0.494, 3.37, w - 0.1, 0.64, lobby ? 29 : 7 + kind, lobby ? 0.25 : 0.88);
+    face(o, 0, 0.494, 3.37, w - 0.1, 0.64, lobby ? cells.lobbySign : cells.sign + kind, lobby ? 0.25 : 0.88);
     if (lobby) {
       for (const u of [-w * 0.46, w * 0.46]) box(o, u, 0.29, 1.88, 0.26, 3.73, 0.31, '#565955');
       box(o, 0, 0.49, 3.79, w, 0.13, 0.75, '#858880');
@@ -97,7 +97,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
       const u = w * 0.41;
       box(o, u, 0.78, 3.49, 0.16, 1.68, 0.72, '#4e5554');
       for (const side of [-1, 1])
-        face(o, u + side * 0.087, 0.78, 3.49, 0.68, 1.58, 14 + kind, 0.98, (side * Math.PI) / 2);
+        face(o, u + side * 0.087, 0.78, 3.49, 0.68, 1.58, cells.blade + kind, 0.98, (side * Math.PI) / 2);
     }
     if (i % 4 === 0) {
       const u = -w * 0.36;
@@ -184,7 +184,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     if (kind === 'stopPole') {
       post(o, 0, 0, 1.1, 0.078, 2.24, 0.078, '#737d7c');
       box(o, 0, 0, 1.58, 0.47, 0.94, 0.08, '#e1dfce');
-      face(o, 0, 0.044, 1.58, 0.45, 0.92, 25, 0.08);
+      face(o, 0, 0.044, 1.58, 0.45, 0.92, cells.bus, 0.08);
       continue;
     }
     if (kind !== 'shelter') continue;
@@ -199,7 +199,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     part(shelters, o, 0.35, -0.39, 1.39, 3.05, 2.19, 0.032, '#b4cbd1');
     box(o, 0, -0.1, 2.67, 5.1, 0.16, 1.9, '#758582');
     box(o, -1.73, -0.3, 1.4, 1.11, 2.18, 0.14, '#455355');
-    face(o, -1.73, -0.21, 1.4, 1, 2.03, 25, 0.12);
+    face(o, -1.73, -0.21, 1.4, 1, 2.03, cells.bus, 0.12);
     if (hasBench) bench(o, 0.48, -0.2);
   }
   for (const [index, [x, y, z, dx, dy]] of fixtures.gantries.entries()) {
@@ -290,7 +290,13 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
     geo.setAttribute(
       'chartCell',
       new T.InstancedBufferAttribute(
-        Float32Array.from(list.flatMap((p) => [p.chart % 4, 7 - Math.floor(p.chart / 4), p.glow])),
+        Float32Array.from(
+          list.flatMap((p) => [
+            p.chart % atlasGrid[0],
+            atlasGrid[1] - 1 - Math.floor(p.chart / atlasGrid[0]),
+            p.glow,
+          ]),
+        ),
         3,
       ),
     );
@@ -307,7 +313,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
         'attribute vec3 chartCell;varying float signLight;\n' +
         sh.vertexShader.replace(
           '#include <uv_vertex>',
-          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.004)+uv*.992)/vec2(4.,8.);signLight=chartCell.z;',
+          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.004)+uv*.992)/vec2(8.,8.);signLight=chartCell.z;',
         );
       sh.fragmentShader =
         'varying float signLight;uniform float streetEvening;\n' +
@@ -323,7 +329,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
       mat,
       list.map((p) => p.row),
     );
-    mesh.userData.grid = [4, 8];
+    mesh.userData.grid = atlasGrid;
   }
   panels('Avenue • interior glazing, signage and displays', cards);
   return {

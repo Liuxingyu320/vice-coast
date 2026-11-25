@@ -167,6 +167,20 @@ function measureFrames(page, durationMs = 6000) {
     await p.goto(pathToFileURL(path.join(root, 'index.html')).href, { timeout: 120000 });
     await p.locator('#roam').click();
     await p.waitForFunction(() => !!window.qaActual, {}, { timeout: 90000 });
+    if (process.env.SHIBA_FIX === '1') {
+      await require('./shiba-fix-views.cjs')({
+        browser,
+        p,
+        output,
+        point,
+        measureFrames,
+        draft,
+        map,
+        errors,
+        pageErrors,
+      });
+      return;
+    }
     if (process.env.SHIBA_ORBIT === '1') {
       await p.locator('#shibaOverview').evaluate((b) => b.click());
       await p.locator('#shibaCanvas').focus();

@@ -5,7 +5,6 @@ import json, pickle, sys
 import numpy as np
 import shapely as sh
 from shapely import Point, Polygon, LineString
-from scipy.ndimage import maximum_filter1d, gaussian_filter1d
 from waterways import water_plan
 from grade import sample
 from prepare_mesh import Mesh
@@ -31,6 +30,36 @@ def build(cache):
     clear = roads.buffer(3.52).union(built)
     bank = Mesh()
     channel = Mesh()
+    rails = Mesh()
+
+    def bar(a, b, r):
+        a, b = np.array(a), np.array(b)
+        d = b - a
+        length = np.linalg.norm(d)
+        if length < 0.001:
+            return
+        axis = d / length
+        n = np.cross(axis, [0, 0, 1] if abs(axis[2]) < 0.9 else [1, 0, 0])
+        n /= np.linalg.norm(n)
+        t = np.cross(axis, n)
+        rim = np.array(
+            [
+                r * (n * np.cos(k * np.pi / 3) + t * np.sin(k * np.pi / 3))
+                for k in range(6)
+            ]
+        )
+        start = len(rails.v)
+        rails.v.extend(np.vstack((a + rim, b + rim)))
+        rails.uv.extend([(k / 6, s) for s in (0, length) for k in range(6)])
+        for k in range(6):
+            j = (k + 1) % 6
+            rails.f.extend(
+                [
+                    (start + k, start + j, start + 6 + j),
+                    (start + k, start + 6 + j, start + 6 + k),
+                ]
+            )
+            rails.mi.extend([0, 0])
 
     def quad(a, b, c, e, u0, u1, vertical=True):
         v = np.array([a, b, c, e])
@@ -53,11 +82,14 @@ def build(cache):
             continue
         stage = max(matches)[1]
         river = body.area > 2200 and body.centroid.y < -400
-        shore = (
-            sh.orient_polygons(body)
-            .boundary.intersection(domain.buffer(-0.005))
-            .difference(clear)
+        visible = sh.union_all(
+            [q for q, h in exposed if body.intersection(q).area > 0.01]
         )
+        shore = sh.orient_polygons(visible if river else body).boundary.intersection(
+            domain.buffer(-0.005)
+        )
+        if not river:
+            shore = shore.difference(clear)
         for line in sh.get_parts(shore):
             if line.geom_type != "LineString" or line.length < 0.25:
                 continue
@@ -67,21 +99,30 @@ def build(cache):
             norm = np.maximum(0.00001, np.linalg.norm(direction, axis=1))
             n = np.column_stack((direction[:, 1], -direction[:, 0])) / norm[:, None]
             mid = len(xy) // 2
-            if body.contains(Point(xy[mid] + n[mid] * 0.29)):
+            if (visible if river else body).contains(Point(xy[mid] + n[mid] * 0.29)):
                 n = -n
-            outside = xy + n * 0.32
+            outside = xy + n * (0.42 if river else 0.32)
             land = sample(d["height"], outside)
-            lip = (
-                np.maximum(
-                    land + 0.28,
-                    gaussian_filter1d(
-                        maximum_filter1d(land, 15, mode="nearest"), 4, mode="nearest"
-                    )
-                    + 0.24,
+            level = np.maximum(land, sample(d["height"], xy))
+            lip = np.maximum(stage + 0.17, level + 0.26) if river else level
+            if river:
+                # A continuous coping grade bridges raster pits. A 4% longitudinal grade envelope
+                # meets the high bank without folding the handrail into every sampled DEM triangle.
+                distance = np.r_[
+                    0.0, np.cumsum(np.linalg.norm(np.diff(xy, axis=0), axis=1))
+                ]
+                lip = np.maximum.accumulate(lip + 0.04 * distance) - 0.04 * distance
+                lip = (
+                    np.maximum.accumulate((lip - 0.04 * distance)[::-1])[::-1]
+                    + 0.04 * distance
                 )
-                if river
-                else sample(d["height"], xy)
-            )
+                railxy = xy + n * 0.21
+                for i, (p, z) in enumerate(zip(railxy, lip)):
+                    bar([*p, z - 0.025], [*p, z + 0.065], 0.095)
+                    bar([*p, z + 0.045], [*p, z + 1.08], 0.045)
+                    if i:
+                        for h, r in ((0.34, 0.023), (0.68, 0.025), (1.04, 0.040)):
+                            bar([*railxy[i - 1], lip[i - 1] + h], [*p, z + h], r)
             along = np.r_[0, np.cumsum(np.linalg.norm(np.diff(xy, axis=0), axis=1))]
             for i in range(len(xy) - 1):
                 a, b = xy[i : i + 2]
@@ -154,7 +195,7 @@ def build(cache):
                     0,
                 )
     pickle.dump(
-        {"bank": bank.pack(), "channel": channel.pack()},
+        {"bank": bank.pack(), "channel": channel.pack(), "bank-rail": rails.pack()},
         open(cache / "river-joinery.pkl", "wb"),
         protocol=4,
     )

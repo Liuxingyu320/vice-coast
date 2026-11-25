@@ -12,15 +12,18 @@ def collection(prefix):
 
 
 def verify(output):
+    layout = json.loads(
+        (Path(__file__).resolve().parents[1] / "assets/shiba-layout.json").read_text()
+    )
     buildings = collection("建物｜")
     trees = collection("植生｜航空")
     street = collection("街具・店舗")
     assert (
         len(buildings.objects)
         == len({o["feature_id"] for o in buildings.objects})
-        == 636
+        == len(layout["footprints"])
     )
-    assert len(trees.objects) == 540
+    assert len(trees.objects) == len(layout["trees"])
     images = [im for im in bpy.data.images if im.source == "FILE"]
     assert all(im.packed_file and im.filepath.startswith("//") for im in images)
     assert bpy.data.images.get("shiba-rooms.jpg")

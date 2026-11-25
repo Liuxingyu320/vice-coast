@@ -30,6 +30,8 @@ assert.ok(
 );
 assert.ok(!inside([820, -475], boundary), 'Space between the two extensions is outside the map');
 assert.equal(map.sourceBuildings, 636);
+assert.equal(map.footprints.length + Object.keys(map.excludedSurveyBuildings).length, map.sourceBuildings);
+assert.ok(map.footprints.every((b) => !(b.id in map.excludedSurveyBuildings)));
 assert.equal(map.height.cm.length, map.height.w * map.height.h);
 assert.ok(map.height.cm.every(Number.isFinite));
 assert.equal(map.pins.length, 6);
@@ -70,7 +72,7 @@ assert.ok(
 );
 assert.ok(gltf.nodes.filter((n) => n.name.startsWith('brid_')).length > 0, 'Surveyed bridges');
 console.log(
-  `Shiba verified: ${map.areaM2} m², ${boundary.length} boundary vertices, ${map.sourceBuildings} buildings, six accessible landmarks, tower tip ${tip.toFixed(2)} m above datum`,
+  `Shiba verified: ${map.areaM2} m², ${boundary.length} boundary vertices, ${map.sourceBuildings} surveyed shells, ${map.footprints.length} active buildings, six accessible landmarks, tower tip ${tip.toFixed(2)} m above datum`,
 );
 
 assert.equal(map.treeCandidates, 635);

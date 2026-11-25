@@ -1,9 +1,36 @@
 """Construct the visible plinth from the measured ground rings, down to 3.5 m below both grades."""
 
-import math
 import pickle
 import numpy as np
 from grade import sample, breaks
+
+
+def park_level(grid, rings):
+    rim = np.asarray(rings[0])
+    points = [
+        a + (b - a) * t
+        for a, b in zip(rim, np.roll(rim, -1, axis=0))
+        for t in breaks(a, b, grid)[:-1]
+    ]
+    grade = sample(grid, points)
+    return float(grade.min() + 0.12), float(grade.max())
+
+
+def seat_park(arr, roles, levels):
+    v, f, uv, mi = arr
+    base = v[roles == 3, 2].min()
+    roof = v[roles == 1, 2]
+    eave = np.min(roof[roof > base + 0.25], initial=v[:, 2].max())
+    floor, high = levels
+    new_eave = max(floor + eave - base, high + 2.20)
+    q = v.copy()
+    h = v[:, 2] - base
+    q[:, 2] = (
+        floor
+        + np.minimum(h, eave - base) * (new_eave - floor) / max(0.25, eave - base)
+        + np.maximum(0, h - (eave - base))
+    )
+    return q, f, uv, mi
 
 
 def foundation_mesh(cache, data, supports, gate_bases, material):
@@ -14,6 +41,16 @@ def foundation_mesh(cache, data, supports, gate_bases, material):
     lookup = {f["id"]: i for i, f in enumerate(data["footprints"])}
     vertices, faces, owners = [], [], []
     found = set()
+    park = (
+        set(data["parkBuildingIds"])
+        - set(data["templePrecinctIds"])
+        - set(data["verifiedBuildings"].values())
+    )
+    levels = {
+        f["id"]: park_level(grid, f["rings"])[0]
+        for f in data["footprints"]
+        if f["id"] in park
+    }
 
     def ring(fid, rim):
         path = []
@@ -46,6 +83,8 @@ def foundation_mesh(cache, data, supports, gate_bases, material):
         from foottown import tower_plan
 
         stations = {s["shell"]: s for s in data["stations"] if s["shell"]}
+        if fid not in lookup:
+            continue
         if fid == TOWER:
             u, n, xy = tower_plan()
             world = xy[:, 0, None] * u + xy[:, 1, None] * n
@@ -101,26 +140,17 @@ def foundation_mesh(cache, data, supports, gate_bases, material):
             for role, rings in surfaces:
                 if role == "GroundSurface":
                     for _, rim in rings:
+                        if fid in levels:
+                            rim = np.column_stack(
+                                (rim[:, :2], np.full(len(rim), levels[fid]))
+                            )
                         ring(fid, rim)
-        if fid == "bldg_7aff4a51-be8b-405b-abe4-ac489697cbc8":
-            a = math.radians(-33.72)
-            rotation = np.array(
-                [[math.cos(a), math.sin(a)], [-math.sin(a), math.cos(a)]]
-            )
-            for x in [-40.5, 40.5]:
-                for y in [-40.5, 40.5]:
-                    xy = (
-                        np.array(
-                            [[-3.85, -3.85], [-3.85, 3.85], [3.85, 3.85], [3.85, -3.85]]
-                        )
-                        + [x, y]
-                    ) @ rotation
-                    ring(fid, np.column_stack([xy, np.full(4, 18.391)]))
-                    # Bearing plate spans the four steel chords at the top of each concrete pier.
-                    o = len(vertices)
-                    vertices.extend([(*p, 18.391) for p in xy])
-                    owners.extend([lookup[fid]] * 4)
-                    faces.extend([(o, o + 2, o + 1), (o, o + 3, o + 2)])
+        if fid == TOWER:
+            from foottown import bearings
+
+            for _, _, _, foot, _, low in bearings(grid):
+                xy = foot[:, 0, None] * u + foot[:, 1, None] * n
+                ring(fid, np.column_stack((xy[::-1], np.full(4, low))))
     assert found == set(lookup), len(found)
     return (
         (

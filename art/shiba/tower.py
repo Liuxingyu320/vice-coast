@@ -4,7 +4,9 @@ import math
 import numpy as np
 
 
-def make_tower(materials):
+def make_tower(materials, grid):
+    from foottown import bearings
+
     white = len(materials)
     materials.extend(
         [
@@ -106,9 +108,9 @@ def make_tower(materials):
 
     # Each lower leg is a four-chord tapered truss; its horizontal orientation comes from the survey.
     stages = [0, 7, 15, 24, 32, 38, 46, 53, 62, 65, 76, 85, 97, 108, 119, 129]
-    for sx, sy in corners:
+    for sx, sy, landing, _, _, _ in bearings(grid):
         last = None
-        for h in stages:
+        for h in [landing, *stages[1:]]:
             rad = width(h)
             thick = np.interp(h, [0, 42, 92, 147], [3.0, 2.25, 1.26, 0.65])
             nodes = [
@@ -135,7 +137,7 @@ def make_tower(materials):
                                     steel,
                                     sides=6,
                                 )
-                    if h == 0:
+                    if last is None:
                         beam((x, y, z - 0.56), (x, y, z - 0.11), 0.81, steel, sides=8)
                 k = (j + 1) % 4
                 beam(nodes[j], nodes[k], 0.21 if h < 81 else 0.16, red)

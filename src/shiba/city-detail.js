@@ -54,8 +54,12 @@ function inscriptions() {
           type(['A6', 'A3', 'A4'][i], 393, 218, 49, '#15252a');
         });
       cell(3, '#242b2a', () => {
-        type('TOKYO TOWER', 23, 130, 66, '#f0eee5');
-        type('FOOT TOWN    /    MAIN ENTRANCE', 28, 189, 24, '#d1b489');
+        // The fascia is 5.88 × 0.84 m. Draw in that same 7:1 coordinate system.
+        g.scale(1, 3.5);
+        g.fillStyle = '#cc4c31';
+        g.fillRect(14, 12, 7, 50);
+        type('TOKYO TOWER', 34, 44, 43, '#f4f0e5');
+        type('FOOT TOWN   /   MAIN ENTRANCE', 36, 63, 12, '#e4c7a1');
       });
       cell(4, '#d8d3c3', () => {
         type('芝公園', 25, 78, 58, '#35594f');
@@ -98,20 +102,12 @@ function inscriptions() {
         type('資源回収', 32, 107, 62, '#e4e9d5');
         type('びん  ・  缶  ・  PET', 30, 188, 39, '#d6e0ce');
       });
-      cell(8, '#d8e4de', () => {
-        g.fillStyle = '#374640';
-        g.fillRect(9, 9, 494, 238);
-        g.strokeStyle = '#b7c6b4';
-        g.lineWidth = 4;
-        for (let i = 0; i < 45; i++) {
-          let x = 16 + ((i * 87) % 478),
-            y = 17 + ((i * 143) % 214);
-          g.beginPath();
-          g.moveTo(x, y);
-          g.lineTo(x + 8, y - 3);
-          g.stroke();
-        }
-        type('足もとにご注意', 56, 157, 48, '#d9bd65');
+      cell(8, '#234640', () => {
+        g.fillStyle = '#f0f1dc';
+        g.fillRect(6, 6, 500, 7);
+        type('←', 18, 148, 112, '#f9f7dc');
+        type('改札口', 147, 137, 78, '#f5f5e8');
+        type('Ticket gates', 151, 197, 36, '#e1e6d8');
       });
       cell(9, '#293332', () => {
         type('OFFICE LOBBY', 31, 132, 56, '#b9b09c');
@@ -119,7 +115,11 @@ function inscriptions() {
       });
       for (let i = 0; i < 2; i++)
         cell(10 + i, '#182523', () => {
-          const col = i ? '#ed6450' : '#58cdab';
+          const col = i ? '#ff6c56' : '#58edb0';
+          // The physical signal is taller than it is wide. Fit the icon to that printed aspect.
+          g.translate(256, 0);
+          g.scale(2.85, 1);
+          g.translate(-256, 0);
           g.strokeStyle = col;
           g.fillStyle = col;
           g.lineWidth = 13;
@@ -360,7 +360,7 @@ export function buildCityDetail(ctx) {
   data.stations.forEach((s, i) => {
     const [x, y] = s.mouth,
       [nx, ny] = s.down,
-      o = { ...loc(x, y, nx, ny), z: ground(x, y) };
+      o = { ...loc(x, y, nx, ny), z: ground(x, y) + s.sillLift };
     const holeW = Math.hypot(s.well[1][0] - s.well[0][0], s.well[1][1] - s.well[0][1]);
     const length = s.length - 0.62,
       width = holeW,
@@ -393,7 +393,7 @@ export function buildCityDetail(ctx) {
       width + 0.1,
       0.15,
       landing + 0.014,
-      '#676d69',
+      '#a8a494',
     );
     const H = s.shell ? (i === 0 ? 2.8 : 2.77) : 2.67;
     for (const sign of [-1, 1]) {
@@ -438,8 +438,76 @@ export function buildCityDetail(ctx) {
           );
       lamp(o, sign * (width * 0.38), length * 0.48, H - 0.08, 0.07, 0.035, length * 0.76);
     }
-    box(o, 0, length + 0.12, (0.4 + floor) / 2, width + 0.13, 0.4 - floor, 0.17, '#394443');
-    label(o, 0, length + 0.02, floor + 1.22, width * 0.76, 0.54, 8, 0, Math.PI);
+    // A real dog-leg beyond the surveyed surface opening, lit across the back wall.
+    const run = 2.65,
+      end = length + run;
+    box(o, 0, length + run / 2, floor - 0.08, width + 0.13, 0.16, run + 0.26, '#7d827b');
+    box(o, 0, length + run / 2, floor + 2.29, width + 0.32, 0.15, run + 0.32, '#aaa99b');
+    box(o, -width / 2 - 0.06, length + run / 2, floor + 1.12, 0.13, 2.35, run + 0.3, '#b5b4a7');
+    box(o, width / 2 + 0.06, length + 0.52, floor + 1.12, 0.13, 2.35, 1.06, '#acafa2');
+    box(o, 0.75, end, floor + 1.12, width + 1.65, 2.35, 0.14, '#a3a89a');
+    for (const h of [0.46, 1.46]) box(o, 0.75, end - 0.08, floor + h, width + 1.64, 0.095, 0.025, '#467b79');
+    const turnStart = width / 2,
+      turnLength = 3.05,
+      turnMid = turnStart + turnLength / 2;
+    box(o, turnMid, end - 0.75, floor - 0.07, turnLength + 0.18, 0.14, 1.66, '#a49c86');
+    box(o, turnMid, end - 0.75, floor + 2.28, turnLength + 0.18, 0.12, 1.66, '#bdb6a3');
+    box(o, turnMid, end - 0.03, floor + 1.12, turnLength, 2.34, 0.13, '#b5b39e');
+    box(o, turnMid, end - 1.55, floor + 1.12, turnLength, 2.34, 0.13, '#a8ad9c');
+    box(o, turnStart + turnLength, end - 0.78, floor + 1.12, 0.13, 2.34, 1.64, '#aaa993');
+    for (let j = 0; j < 8; j++) {
+      box(
+        o,
+        0,
+        length - landing + (j * (run + landing)) / 8,
+        floor + 0.011,
+        width - 0.08,
+        0.012,
+        0.014,
+        '#77796c',
+      );
+    }
+    for (const sign of [-1, 1]) {
+      for (let j = 0; j < 4; j++) {
+        box(
+          o,
+          sign * (width / 2 - 0.017),
+          length * 0.55,
+          floor + 0.28 + j * 0.34,
+          0.014,
+          0.018,
+          length * 0.84,
+          '#858779',
+        );
+      }
+    }
+    for (let j = 0; j < 5; j++) {
+      const u = turnStart + 0.3 + j * 0.55;
+      box(o, u, end - 0.77, floor + 0.006, 0.014, 0.008, 1.38, '#868674');
+    }
+    lamp(o, turnMid, end - 0.75, floor + 2.17, 1.68, 0.065, 0.12);
+    box(o, turnMid, end - 0.097, floor + 1.34, turnLength, 0.15, 0.035, '#447c77');
+    for (let j = 0; j < 6; j++) {
+      box(o, 0.75, end - 0.083, floor + 0.19 + j * 0.34, width + 1.59, 0.014, 0.018, '#7b8178');
+      box(
+        o,
+        -width / 2 + 0.012,
+        length + run / 2,
+        floor + 0.19 + j * 0.34,
+        0.017,
+        0.014,
+        run + 0.21,
+        '#949588',
+      );
+    }
+    for (let j = 0; j < 5; j++) {
+      box(o, -width * 0.47 + j * width * 0.24, end - 0.086, floor + 1.12, 0.012, 2.26, 0.018, '#8d9185');
+    }
+    box(o, 0, length - 0.1, floor + 0.013, width - 0.08, 0.025, 0.32, '#d0c5a2');
+    box(o, width * 0.35, end - 0.13, floor + 1.21, 1.1, 0.55, 0.035, '#365853');
+    label(o, width * 0.35, end - 0.155, floor + 1.21, 1.07, 0.52, 8, 0.19, Math.PI);
+    lamp(o, 0, length + 0.86, floor + 2.18, width * 0.81, 0.045, 0.14);
+    lamp(o, 0.67, end - 0.095, floor + 1.9, width * 0.78, 0.1, 0.045);
     if (!s.shell) {
       box(o, 0, length / 2, H + 0.08, width + 0.35, 0.16, length + 0.44, '#86958d');
     }
@@ -460,11 +528,12 @@ export function buildCityDetail(ctx) {
     box(ft, u, 30.9, 4.52, 0.13, 0.2, 5.48, metal);
   }
   box(ft, 0, 31.0, 4.75, 17.6, 0.27, 5.85, '#a6a79c');
-  box(ft, 0, 33.95, 4.58, 17.76, 0.59, 0.14, '#333e40');
-  label(ft, 0, 34.04, 4.59, 7.4, 0.55, 3, 0.85);
+  box(ft, 0, 33.95, 4.58, 17.76, 1.03, 0.14, '#394043');
+  label(ft, 0, 34.044, 4.57, 5.88, 0.84, 3, 0.85);
   for (let i = -3; i <= 3; i++) {
     const u = i * 2.1;
-    box(ft, u, 28.48, 2.04, 2.04, 3.7, 0.08, '#526667');
+    part(shelters, ft, u, 28.52, 2.02, 2.02, 3.66, 0.065, '#a3bbb8');
+    for (const side of [-0.97, 0.97]) box(ft, u + side, 28.56, 2.02, 0.074, 3.69, 0.12, metal);
     for (const z of [0.48, 2.94]) box(ft, u, 28.54, z, 2.08, 0.052, 0.048, silver);
     box(ft, u + 0.47, 28.58, 1.56, 0.046, 0.61, 0.065, '#c9bb9f');
     lamp(ft, u, 28.62, 3.65, 1.36, 0.043, 0.038);
@@ -500,8 +569,10 @@ export function buildCityDetail(ctx) {
   for (const [x, y, z, dx, dy] of data.fixtures.signals) {
     const o = { ...loc(x, y, dx, dy), z };
     box(o, 0.19, 0, 2.65, 0.34, 0.68, 0.24, '#374442');
-    pedestrians.push([cards.length, Math.abs(dx) > Math.abs(dy) ? 0 : 12]);
-    label(o, 0.19, -0.128, 2.7, 0.29, 0.48, 10, 0.52, Math.PI);
+    for (const side of [-1, 1]) {
+      pedestrians.push([cards.length, Math.abs(dx) > Math.abs(dy) ? 0 : 12]);
+      label(o, 0.19, side * 0.132, 2.69, 0.32, 0.53, 10, 1.65, side < 0 ? Math.PI : 0);
+    }
     box(o, 0.175, -0.18, 3.0, 0.4, 0.056, 0.3, '#34413b');
   }
   const chart = inscriptions(),
@@ -527,7 +598,7 @@ export function buildCityDetail(ctx) {
       'varying float markLight;uniform float detailEvening;\n' +
       sh.fragmentShader.replace(
         '#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*markLight*(.12+1.3*detailEvening);',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*markLight*(.12+1.3*detailEvening+.82*step(1.5,markLight));',
       );
   };
   const labels = instances(

@@ -78,6 +78,21 @@ def build(cache):
                     )
                 )
             ob.clear()
+    # The south motorway is delivered as one box deck and twelve separate pier objects in CityGML.
+    from bridge_joinery import connect
+
+    joins = {}
+    for i, (group, fid, label, arr) in enumerate(result):
+        if fid == "brid_ec2a731e-d558-41bd-a1b8-409f341db81c":
+            grid = json.loads(
+                (
+                    Path(__file__).resolve().parents[2] / "assets/shiba-layout.json"
+                ).read_text()
+            )["height"]
+            geometry, seats, lights = connect(arr, roads, grid)
+            result[i] = group, fid, label, geometry
+            joins[fid] = {"bearings": seats, "lights": lights}
+    (cache / "bridge-joinery.json").write_text(json.dumps(joins))
     result.append(
         ("Bridge", "skyline-viaduct", "周辺 · 高架の連続径間", outside.pack())
     )

@@ -92,7 +92,41 @@ def connections(cache, data, survey, region):
     return len(data["roads"]) - count
 
 
-def split_backdrop(cache, terrain, region, data):
+def visual_routes(cache, region):
+    """Continue terminal through ways to the end of a 150 m scenery band."""
+    routes = list(mapped_roads(cache))
+    index = sh.STRtree([r for r, _ in routes])
+    target = region.buffer(150, quad_segs=20)
+    for i, (line, info) in enumerate(routes):
+        if info[1] not in (
+            "primary",
+            "secondary",
+            "tertiary",
+            "trunk",
+            "unclassified",
+            "residential",
+        ):
+            continue
+        coords = np.array(line.coords)
+        for p, q in [(coords[0], coords[1]), (coords[-1], coords[-2])]:
+            point = sh.Point(p)
+            if region.covers(point) or not target.covers(point):
+                continue
+            if any(
+                j != i for j in index.query(point.buffer(0.15), predicate="intersects")
+            ):
+                continue
+            d = p - q
+            d /= max(0.001, np.linalg.norm(d))
+            if region.distance(sh.Point(p + 4 * d)) <= region.distance(point) + 0.5:
+                continue
+            ray = LineString([p, p + 350 * d]).intersection(target)
+            for extension in sh.get_parts(ray):
+                if extension.geom_type == "LineString" and extension.length > 0.5:
+                    yield extension, info
+
+
+def split_backdrop(cache, terrain, region, data, ground_at):
     from prepare_mesh import Mesh
     from waterways import water_plan
 
@@ -112,7 +146,49 @@ def split_backdrop(cache, terrain, region, data):
         ]
     )
     road = road.union(core)
+    drive_road = road
+    extra = list(visual_routes(cache, region))
+    road = road.union(
+        sh.union_all([line.buffer(info[0] / 2, quad_segs=10) for line, info in extra])
+    )
     walk = road.buffer(3.2, quad_segs=8).difference(road)
+    lamps = []
+    band_lamps = region.buffer(160).difference(region.buffer(3))
+    for line, info in [*mapped_roads(cache), *extra]:
+        if info[1] not in (
+            "primary",
+            "secondary",
+            "tertiary",
+            "trunk",
+            "unclassified",
+            "residential",
+        ):
+            continue
+        for section in sh.get_parts(line.intersection(band_lamps)):
+            if section.geom_type != "LineString" or section.length < 3:
+                continue
+            for dist in np.arange(min(11, section.length / 2), section.length, 26):
+                p = np.asarray(section.interpolate(dist).coords[0])
+                t = (
+                    np.asarray(
+                        section.interpolate(min(section.length, dist + 0.8)).coords[0]
+                    )
+                    - section.interpolate(max(0, dist - 0.8)).coords[0]
+                )
+                t /= max(1e-5, np.linalg.norm(t))
+                for side in (-1, 1):
+                    axis = t * side
+                    xy = p + np.array([axis[1], -axis[0]]) * (info[0] / 2 + 2.35)
+                    if not walk.contains(sh.Point(xy)) or not band_lamps.contains(
+                        sh.Point(xy)
+                    ):
+                        continue
+                    if any(np.linalg.norm(q[:2] - xy) < 14 for q in lamps):
+                        continue
+                    lamps.append(
+                        [*xy.round(4), round(ground_at(xy) + 0.14, 4), *axis.round(6)]
+                    )
+    (cache / "scenery-lamps.json").write_text(json.dumps(lamps))
     # Carry the same continuous white edge marking around the true union. Minor streets stay unmarked.
     major = sh.union_all(
         [
@@ -122,6 +198,44 @@ def split_backdrop(cache, terrain, region, data):
         ]
     )
     edge = road.buffer(-0.46).boundary.buffer(0.065, quad_segs=3).intersection(major)
+    # Restore recorded pedestrian crossings so a transverse side street through a median
+    # reads as an intersection in the rooftop view. Use the actual incoming road width.
+    from prepare_pavement import frame, rectangle
+
+    routes = [
+        (line, info)
+        for line, info in mapped_roads(cache)
+        if info[0] >= 4.8 and line.intersects(band)
+    ]
+    routes_tree = sh.STRtree([line for line, _ in routes])
+    stripes, clear = [], []
+    painted = []
+    for node in ET.parse(cache / "streets.osm").iterfind("node"):
+        tags = {tag.get("k"): tag.get("v") for tag in node.iterfind("tag")}
+        if tags.get("highway") != "crossing" or tags.get("crossing") in (
+            "unmarked",
+            "no",
+        ):
+            continue
+        xy = sh.Point(en(float(node.get("lat")), float(node.get("lon"))))
+        if not band.covers(xy) or not 4 < xy.distance(region) < 165:
+            continue
+        li = routes_tree.nearest(xy)
+        line, info = routes[li]
+        if line.distance(xy) > 0.4 or any(
+            xy.distance(other) < 4.25 for other in painted
+        ):
+            continue
+        o, t, n = frame(line, line.project(xy))
+        half = info[0] / 2 - 0.21
+        crossing = rectangle(o, t, n, -1.65, 1.65, -half, half)
+        if not road.buffer(0.001).covers(crossing):
+            continue
+        painted.append(xy)
+        clear.append(crossing.buffer(0.4))
+        for off in np.arange(-half + 0.18, half - 0.44, 0.85):
+            stripes.append(rectangle(o, t, n, -1.65, 1.65, off, off + 0.44))
+    edge = edge.difference(sh.union_all(clear)).union(sh.union_all(stripes))
     waters = (
         water_plan(cache, data, region.buffer(95))
         .difference(road.union(walk))
@@ -150,7 +264,13 @@ def split_backdrop(cache, terrain, region, data):
 
     (cache / "edge-travel.json").write_text(
         json.dumps(
-            {"boundary": encode(drive)[0], "walks": near(walk), "waters": near(waters)},
+            {
+                "boundary": encode(drive)[0],
+                "walks": near(
+                    drive_road.buffer(3.2, quad_segs=8).difference(drive_road)
+                ),
+                "waters": near(waters),
+            },
             separators=(",", ":"),
         )
     )

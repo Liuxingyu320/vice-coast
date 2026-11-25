@@ -131,9 +131,16 @@ def build(cache):
 
     from context_streets import split_backdrop
 
-    background, streets = split_backdrop(cache, clipped.pack(), region, layout)
+    background, streets = split_backdrop(
+        cache, clipped.pack(), region, layout, ground_at
+    )
     pickle.dump(streets, open(cache / "edge-streets.pkl", "wb"), protocol=4)
-    results = [classify(far[0][3]), classify(detail)]
+    from skyline_walls import split_setbacks
+
+    skyline = [split_setbacks(far[0][3]), split_setbacks(detail)]
+    with (cache / "skyline-walls.pkl").open("wb") as output:
+        pickle.dump(skyline, output, protocol=4)
+    results = [classify(shell) for shell in skyline]
     pickle.dump(
         (background, results), open(cache / "horizon-grade.pkl", "wb"), protocol=4
     )

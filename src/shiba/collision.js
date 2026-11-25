@@ -79,11 +79,40 @@ function indexed(polygons) {
     return null;
   };
 }
-export function createCollision(coreBoundary, { solids, wells, walks, travelBoundary }) {
+export function createCollision(coreBoundary, { solids, wells, walks, travelBoundary, aprons }) {
   const boundary = travelBoundary || coreBoundary;
   const world = indexed(solids),
     stairs = indexed(wells),
     raised = indexed(walks);
+  const ramps = [];
+  if (aprons) {
+    const vertices = aprons.tenthsMm.map((h, i) => [
+      aprons.xy[i * 2] / aprons.scale,
+      aprons.xy[i * 2 + 1] / aprons.scale,
+      h / 10000,
+    ]);
+    for (let i = 0; i < aprons.triangles.length; i += 3) {
+      ramps.push([
+        [vertices[aprons.triangles[i]], vertices[aprons.triangles[i + 1]], vertices[aprons.triangles[i + 2]]],
+      ]);
+    }
+  }
+  const ramp = indexed(ramps);
+  function sidewalkLift(x, y) {
+    if (raised(x, y, x, y, (r) => inSolid(x, y, r))) return 0.14;
+    return (
+      ramp(x, y, x, y, ([[a, b, c]]) => {
+        const det = cross(a, b, c);
+        if (Math.abs(det) < 1e-12) return 0;
+        const p = [x, y],
+          u = cross(a, p, c) / det,
+          v = cross(a, b, p) / det;
+        return u >= -1e-8 && v >= -1e-8 && u + v <= 1.00000001
+          ? a[2] + u * (b[2] - a[2]) + v * (c[2] - a[2])
+          : 0;
+      }) || 0
+    );
+  }
   // Bucket boundary edges by northing. Several real streets follow the 3,000-edge survey cut.
   const rows = new Map();
   edges(boundary, ([ax, ay], [bx, by]) => {
@@ -130,6 +159,6 @@ export function createCollision(coreBoundary, { solids, wells, walks, travelBoun
   return {
     passable,
     contact,
-    sidewalkLift: (x, y) => (raised(x, y, x, y, (r) => inSolid(x, y, r)) ? 0.14 : 0),
+    sidewalkLift,
   };
 }

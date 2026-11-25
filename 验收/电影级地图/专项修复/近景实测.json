@@ -1,0 +1,902 @@
+{
+  "chrome": "158.0.8127.37",
+  "viewport": [
+    1440,
+    900
+  ],
+  "views": [
+    {
+      "file": "fix-01-foottown-base",
+      "label": "正面入口",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 124,
+      "eye": [
+        32,
+        21.88,
+        -40
+      ],
+      "fov": 70,
+      "direction": [
+        -0.6841033164654537,
+        0.10276752042903263,
+        0.7221090562690898
+      ]
+    },
+    {
+      "file": "fix-01-foottown-base",
+      "label": "初夜入口雨棚",
+      "period": "night",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 122,
+      "eye": [
+        31,
+        21.75,
+        -35
+      ],
+      "fov": 63,
+      "direction": [
+        -0.746855815846125,
+        0.08909550556093768,
+        0.6589904257465811
+      ]
+    },
+    {
+      "file": "fix-01-foottown-base",
+      "label": "西南承台",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 155,
+      "eye": [
+        -66.61,
+        24.137800000000002,
+        14.01
+      ],
+      "fov": 55,
+      "direction": [
+        0.9671045631317903,
+        0.0638867494457806,
+        -0.24622600840471964
+      ]
+    },
+    {
+      "file": "fix-01-foottown-base",
+      "label": "东南承台",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 116,
+      "eye": [
+        12.74,
+        22.60922,
+        67.51
+      ],
+      "fov": 55,
+      "direction": [
+        -0.14290237702862668,
+        0.08302257891951156,
+        -0.9862485295447196
+      ]
+    },
+    {
+      "file": "fix-01-foottown-base",
+      "label": "东北承台",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 118,
+      "eye": [
+        68.39,
+        19.425120000000003,
+        -14.36
+      ],
+      "fov": 55,
+      "direction": [
+        -0.963807200895674,
+        0.10421682740850569,
+        0.24538649593356138
+      ]
+    },
+    {
+      "file": "fix-01-foottown-base",
+      "label": "西北承台",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 210,
+      "sceneFrames": 210,
+      "peakDrawCalls": 134,
+      "eye": [
+        -12.6,
+        26.210919999999998,
+        -66.77
+      ],
+      "fov": 55,
+      "direction": [
+        0.1436689885932409,
+        -0.08819794776031148,
+        0.9856877516371321
+      ]
+    },
+    {
+      "file": "fix-02-gable-and-corners",
+      "label": "坡地一楼与转角",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 138,
+      "eye": [
+        190.09,
+        13.33174,
+        -32.19
+      ],
+      "fov": 65,
+      "direction": [
+        -0.7622736226105999,
+        0.14691999614237397,
+        0.6303597695012251
+      ]
+    },
+    {
+      "file": "fix-02-gable-and-corners",
+      "label": "芝公园坡顶山墙",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 127,
+      "eye": [
+        78,
+        10.281999999999998,
+        207
+      ],
+      "fov": 58,
+      "direction": [
+        0.7698838329862916,
+        0.05643460390422465,
+        0.6356838987960205
+      ]
+    },
+    {
+      "file": "fix-03-zojoji-annex-day",
+      "label": "大殿与东西配殿",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 157,
+      "eye": [
+        317.4,
+        10.618400000000001,
+        135.7
+      ],
+      "fov": 67,
+      "direction": [
+        -0.9824067320873139,
+        0.14518873157320217,
+        -0.11746167448870026
+      ]
+    },
+    {
+      "file": "fix-03-zojoji-annex-day",
+      "label": "二十五级石阶与寺门",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 148,
+      "eye": [
+        295.7,
+        9.685599999999997,
+        134.5
+      ],
+      "fov": 55,
+      "direction": [
+        -0.9855055931311699,
+        0.1507916823004237,
+        -0.07772126128794722
+      ]
+    },
+    {
+      "file": "fix-03-zojoji-annex-day",
+      "label": "西配殿与附房檐口",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 210,
+      "sceneFrames": 210,
+      "peakDrawCalls": 139,
+      "eye": [
+        289,
+        9.104000000000003,
+        158
+      ],
+      "fov": 48,
+      "direction": [
+        -0.903876698048931,
+        0.04561918864270472,
+        0.42535374025832084
+      ]
+    },
+    {
+      "file": "fix-03-zojoji-annex-day",
+      "label": "北侧木构配殿",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 143,
+      "eye": [
+        289,
+        9.64,
+        91
+      ],
+      "fov": 60,
+      "direction": [
+        -0.9745398554845563,
+        0.12122018331446605,
+        -0.1886206171905594
+      ]
+    },
+    {
+      "file": "fix-04-park-clean-and-kiosks",
+      "label": "弧形步道",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 121,
+      "eye": [
+        66,
+        8.0976,
+        217.6
+      ],
+      "fov": 62,
+      "direction": [
+        -0.4794267986910246,
+        0.04008008037056956,
+        -0.8766661461778734
+      ]
+    },
+    {
+      "file": "fix-04-park-clean-and-kiosks",
+      "label": "石板庭院",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 147,
+      "eye": [
+        309,
+        10.514,
+        121
+      ],
+      "fov": 64,
+      "direction": [
+        0.8642634999703879,
+        -0.129261409714321,
+        0.4861482187333428
+      ]
+    },
+    {
+      "file": "fix-04-park-clean-and-kiosks",
+      "label": "绿地小屋",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 117,
+      "eye": [
+        42.7,
+        8.951000000000002,
+        211
+      ],
+      "fov": 57,
+      "direction": [
+        -0.8356514608943281,
+        0.08154286955406866,
+        -0.5431734495813131
+      ]
+    },
+    {
+      "file": "fix-05-viaduct-and-riverbank",
+      "label": "南侧高架与古川",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 125,
+      "eye": [
+        -33.5,
+        5.081400000000002,
+        419.2
+      ],
+      "fov": 65,
+      "direction": [
+        0.945681029401936,
+        0.06663379789757727,
+        0.3181938522458279
+      ]
+    },
+    {
+      "file": "fix-05-viaduct-and-riverbank",
+      "label": "横梁、支座与纵肋",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 133,
+      "eye": [
+        -3,
+        6.140000000000008,
+        434
+      ],
+      "fov": 56,
+      "direction": [
+        0.9629024410802544,
+        0.26761760506339777,
+        -0.03463677845612412
+      ]
+    },
+    {
+      "file": "fix-05-viaduct-and-riverbank",
+      "label": "临水护岸",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 108,
+      "eye": [
+        7,
+        5.463999999999997,
+        440
+      ],
+      "fov": 63,
+      "direction": [
+        0.6733747046003771,
+        -0.051497132170866745,
+        0.7375056288480322
+      ]
+    },
+    {
+      "file": "fix-05-viaduct-and-riverbank",
+      "label": "桥头护栏与混凝土压顶",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 101,
+      "eye": [
+        -33.5,
+        5.081400000000002,
+        419.2
+      ],
+      "fov": 41,
+      "direction": [
+        0.492333241989695,
+        -0.07660356690852047,
+        0.8670293376632698
+      ]
+    },
+    {
+      "file": "fix-05-viaduct-and-riverbank",
+      "label": "支座接触面",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 108,
+      "eye": [
+        6.1,
+        9.739,
+        430.1
+      ],
+      "fov": 46,
+      "direction": [
+        0.8007546482375172,
+        0.19254812812411254,
+        0.5672012091682372
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "大门 A6 与店面",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 100,
+      "eye": [
+        760.3,
+        5.0494,
+        183.9
+      ],
+      "fov": 66,
+      "direction": [
+        0.972209769179398,
+        -0.10552564728270553,
+        -0.20897967001052503
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "首层招牌与退线铺装",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 118,
+      "eye": [
+        782.5,
+        4.3422,
+        198.7
+      ],
+      "fov": 68,
+      "direction": [
+        -0.7107512216110794,
+        0.0680623856396516,
+        0.7001429944228519
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "店角退线与盲道",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 86,
+      "eye": [
+        808,
+        4.2059999999999995,
+        204
+      ],
+      "fov": 63,
+      "direction": [
+        0.958520804887627,
+        -0.1543218495869079,
+        -0.2396302012219066
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "A6 地下通廊",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 100,
+      "eye": [
+        765,
+        4.42792,
+        181.51
+      ],
+      "fov": 64,
+      "direction": [
+        0.9425264715659032,
+        -0.3113164935582179,
+        0.12135028321411045
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "A6 地下转角",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 100,
+      "eye": [
+        773.8,
+        1.5570000000000004,
+        182.55
+      ],
+      "fov": 69,
+      "direction": [
+        0.9351110018500458,
+        -0.007201318746206116,
+        0.35428174554628017
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "芝公园 A3",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 156,
+      "eye": [
+        419.75235564400003,
+        5.583325949075202,
+        469.44588687080005
+      ],
+      "fov": 64,
+      "direction": [
+        0.028863279724996114,
+        -0.1250122971010276,
+        -0.9917352654095958
+      ]
+    },
+    {
+      "file": "fix-06-metro-and-shopfronts",
+      "label": "芝公园 A4",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 156,
+      "eye": [
+        384.60276191659995,
+        5.5321260800096,
+        458.593663583
+      ],
+      "fov": 64,
+      "direction": [
+        0.14672550182406136,
+        -0.10546372939954766,
+        -0.9835390327260105
+      ]
+    },
+    {
+      "file": "fix-07-map-edge-road",
+      "label": "屋顶向北俯瞰",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 89,
+      "eye": [
+        826,
+        54.154,
+        121
+      ],
+      "fov": 63,
+      "direction": [
+        0.2330399364540311,
+        -0.3386481523623756,
+        -0.9115973984819452
+      ]
+    },
+    {
+      "file": "fix-08-asphalt-and-markings",
+      "label": "大门交叉口",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 85,
+      "eye": [
+        815,
+        7.8260000000000005,
+        203
+      ],
+      "fov": 62,
+      "direction": [
+        0.9085572767397508,
+        -0.1636101988344428,
+        -0.3843896170822023
+      ]
+    },
+    {
+      "file": "fix-08-asphalt-and-markings",
+      "label": "初夜路面骨料与轮迹",
+      "period": "night",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 96,
+      "eye": [
+        799,
+        3.7910000000000004,
+        196.5
+      ],
+      "fov": 63,
+      "direction": [
+        0.9259429955551918,
+        -0.3097587967797303,
+        0.2160533656295412
+      ]
+    },
+    {
+      "file": "fix-08-asphalt-and-markings",
+      "label": "芝公园弯道",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 210,
+      "sceneFrames": 210,
+      "peakDrawCalls": 120,
+      "eye": [
+        68,
+        9.879999999999999,
+        217
+      ],
+      "fov": 59,
+      "direction": [
+        -0.538210617215554,
+        -0.055906627863265765,
+        -0.8409540893993029
+      ]
+    },
+    {
+      "file": "fix-08-asphalt-and-markings",
+      "label": "高架桥下",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 112,
+      "eye": [
+        -27,
+        6.516000000000002,
+        414
+      ],
+      "fov": 61,
+      "direction": [
+        0.8620354753094271,
+        -0.0635032800144612,
+        0.5028540272638324
+      ]
+    },
+    {
+      "file": "fix-09-daimon-signals-day",
+      "label": "白天的大门路口与地名牌",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 84,
+      "eye": [
+        790,
+        5.220000000000001,
+        195
+      ],
+      "fov": 59,
+      "direction": [
+        0.9710820734938097,
+        0.0932749886382212,
+        -0.21977120610649442
+      ]
+    },
+    {
+      "file": "fix-09-daimon-signals-day",
+      "label": "行人信号灯和灯杆底座",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 90,
+      "eye": [
+        799.5,
+        4.876200000000001,
+        190.3
+      ],
+      "fov": 42,
+      "direction": [
+        0.9024878460629122,
+        0.07173185750589446,
+        -0.42470016285313517
+      ]
+    },
+    {
+      "file": "fix-09-daimon-signals-day",
+      "label": "绿灯相位",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 210,
+      "sceneFrames": 210,
+      "peakDrawCalls": 86,
+      "eye": [
+        799.7,
+        5.811999999999999,
+        192.8
+      ],
+      "fov": 43,
+      "direction": [
+        0.9527413271274981,
+        0.21306760588487808,
+        -0.21653211980170506
+      ]
+    },
+    {
+      "file": "fix-09-daimon-signals-day",
+      "label": "黄灯相位",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 86,
+      "eye": [
+        799.7,
+        5.811999999999999,
+        192.8
+      ],
+      "fov": 43,
+      "direction": [
+        0.9527413271274981,
+        0.21306760588487808,
+        -0.21653211980170506
+      ]
+    },
+    {
+      "file": "fix-09-daimon-signals-day",
+      "label": "红灯相位",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 86,
+      "eye": [
+        799.7,
+        5.811999999999999,
+        192.8
+      ],
+      "fov": 43,
+      "direction": [
+        0.9527413271274981,
+        0.21306760588487808,
+        -0.21653211980170506
+      ]
+    },
+    {
+      "file": "fix-10-trees-and-ao",
+      "label": "芝公园树林",
+      "period": "day",
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 121,
+      "eye": [
+        19,
+        11.646000000000003,
+        222
+      ],
+      "fov": 66,
+      "direction": [
+        -0.27699012618766194,
+        0.16624024073362836,
+        -0.9463829311411784
+      ]
+    },
+    {
+      "file": "fix-10-trees-and-ao",
+      "label": "墙脚、树根与路缘",
+      "period": "dusk",
+      "fps": 60,
+      "p95ms": 16.8,
+      "p99ms": 16.8,
+      "frames": 211,
+      "sceneFrames": 211,
+      "peakDrawCalls": 118,
+      "eye": [
+        43.8,
+        8.328,
+        213.4
+      ],
+      "fov": 67,
+      "direction": [
+        -0.6854232738746397,
+        0.10676338791369347,
+        -0.720275304749622
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "drive": {
+    "pace": {
+      "fps": 60,
+      "p95ms": 16.7,
+      "p99ms": 16.8,
+      "frames": 361,
+      "sceneFrames": 361,
+      "peakDrawCalls": 109,
+      "eye": [
+        845.9459851698689,
+        5.443844656964671,
+        71.20682760745454
+      ],
+      "fov": 65.96614838658304,
+      "direction": [
+        0.11751819585749441,
+        0.006062003896241496,
+        -0.9930522271014559
+      ]
+    },
+    "start": [
+      832.94,
+      -181.11,
+      2.947
+    ],
+    "exit": [
+      844.61,
+      -82.51,
+      0.118
+    ],
+    "distanceM": 99.29
+  },
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)"
+}

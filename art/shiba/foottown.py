@@ -20,10 +20,33 @@ def open_shelter(arr, roles, id, names):
     return (v, f[sel], uv, mi), roles
 
 
+def bearings(grid):
+    from grade import breaks
+
+    u, n, _ = tower_plan()
+    corners = np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]])
+    result = []
+    for sx, sy in corners:
+        foot = np.array([sx, sy]) * 40.5 + corners * 4.65
+        world = foot[:, 0, None] * u + foot[:, 1, None] * n
+        survey = [
+            a + (b - a) * t
+            for a, b in zip(world, np.roll(world, -1, axis=0))
+            for t in breaks(a, b, grid)
+        ]
+        z = sample(grid, survey)
+        # Keep exactly the chord inclinations from the first laser-fitted seven-metre stage.
+        h = max(1.6, float(np.max(z)) + 1.85 - 18.391)
+        radius = 40.5 - 0.30 * h
+        head = np.array([sx, sy]) * radius + corners * 3.94
+        result.append((sx, sy, h, foot, head, float(np.min(z)) - 0.16))
+    return result
+
+
 def foottown(arr, roles, names, grid):
     v, f, uv, old = arr
     high = v[f]
-    keep = high[:, :, 2].min(1) > 42.9
+    keep = high[:, :, 2].min(1) > 130.0
     u, n, outline = tower_plan()
     xyz = []
     uvs = []
@@ -99,6 +122,32 @@ def foottown(arr, roles, names, grid):
     for a, b in zip(outline, np.roll(outline, -1, axis=0)):
         face([(0, 0, 41.87), (*a, 41.87), (*b, 41.87)], roof, 1)
         face([(0, 0, 18.26), (*b, 18.26), (*a, 18.26)], stone, 3)
+    concrete = names.index("Bridge concrete")
+    for sx, sy, h, foot, head, low in bearings(grid):
+        seat = 18.391 + h - 0.56
+        for k in range(4):
+            j = (k + 1) % 4
+            face(
+                [
+                    (*foot[k], low),
+                    (*foot[j], low),
+                    (*head[j], seat - 0.17),
+                    (*head[k], seat - 0.17),
+                ],
+                concrete,
+                2,
+            )
+            face(
+                [
+                    (*head[k], seat - 0.17),
+                    (*head[j], seat - 0.17),
+                    (*head[j], seat),
+                    (*head[k], seat),
+                ],
+                metal,
+                2,
+            )
+        face([(*p, seat) for p in head], concrete, 1)
     off = len(v)
     return (
         np.concatenate([v, np.float32(xyz)]),

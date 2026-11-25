@@ -3,7 +3,7 @@
 import json, pickle, sys, math
 from pathlib import Path
 import xml.etree.ElementTree as ET
-from station_sites import DAIMON_A6, SHIBA_A3, BASIN, TOWER, bounds_rect
+from station_sites import DAIMON_A6, SHIBA_A3, BASIN, TOWER, station_envelope
 from shiba_site import en
 from shapely import Polygon, LineString, Point, union_all, STRtree
 
@@ -27,8 +27,7 @@ AXIS = LineString(
 )
 
 
-def main(cache):
-    d = json.loads((ROOT / "assets/shiba-layout.json").read_text())
+def plan(cache, d, tactile):
     roads = [
         (LineString(p), i[0])
         for (k, p), i in zip(d["roads"], d["roadInfo"])
@@ -43,7 +42,11 @@ def main(cache):
     )
     surfaces, _, _ = pickle.load(open(cache / "surfaces.pkl", "rb"))
     ids = {f["id"] for f in d["footprints"]} - set(d["verifiedBuildings"].values())
-    exempt = set(d.get("templePrecinctIds", [])) | {DAIMON_A6, SHIBA_A3, BASIN, TOWER}
+    exempt = (
+        set(d.get("templePrecinctIds", []))
+        | set(d["parkSiteIds"])
+        | {DAIMON_A6, SHIBA_A3, BASIN, TOWER}
+    )
     entrances = []
     for node in ET.parse(cache / "streets.osm").iterfind("node"):
         tags = {t.get("k"): t.get("v") for t in node.iterfind("tag")}
@@ -52,13 +55,9 @@ def main(cache):
                 Point(en(float(node.get("lat")), float(node.get("lon")))).buffer(1.15)
             )
     for station in d["stations"]:
-        entrances.append(
-            bounds_rect(
-                station["mouth"], station["down"], -2.3, 2.3, -3, station["length"]
-            )
-        )
+        entrances.append(station_envelope(station, 4.0))
     public_access = union_all(entrances)
-    tactile = carriageways.buffer(0.86).difference(carriageways.buffer(0.5))
+    tactile = tactile.buffer(0.018)
     polygons = {}
     for fid, _, _, ss in surfaces:
         if fid not in ids:
@@ -83,7 +82,7 @@ def main(cache):
                 or poly.area < 18
             ):
                 continue
-            ring = list(poly.exterior.simplify(0.16).coords)
+            ring = list(poly.exterior.coords)
             for a, b in zip(ring, ring[1:]):
                 dx, dy = b[0] - a[0], b[1] - a[1]
                 length = math.hypot(dx, dy)
@@ -166,11 +165,59 @@ def main(cache):
                             int(j == count // 2 and poly.area > 195 and idx % 3 != 1),
                         ]
                     )
+    # Assign a brand once, in survey space. Separate frontages across the street also share a neighbourhood.
+    from collections import defaultdict
+    from hashlib import blake2s
+
+    bins = defaultdict(list)
+    for row in out:
+        x, y, _, _, _, _, owner, lobby = row
+        if lobby:
+            continue
+        ix, iy = math.floor(x / 30), math.floor(y / 30)
+        used = {
+            r[5]
+            for i in range(ix - 1, ix + 2)
+            for j in range(iy - 1, iy + 2)
+            for r in bins[i, j]
+            if math.hypot(x - r[0], y - r[1]) <= 30.02
+        }
+        seed = int.from_bytes(
+            blake2s(f"{owner}/{x}/{y}".encode(), digest_size=4).digest(), "little"
+        )
+        brand = next(
+            ((seed + i) % 16 for i in range(16) if (seed + i) % 16 not in used), None
+        )
+        if brand is None:
+            row[7] = 1
+        else:
+            row[5] = brand
+            bins[ix, iy].append(row)
     (ROOT / "assets/shiba-frontages.json").write_text(
         json.dumps(out, separators=(",", ":"))
     )
     print(len(out), "wall-mounted bays")
+    return out
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    # For standalone regeneration, read the actual emitted guide polygons from the same noded mesh.
+    import gzip
+    import numpy as np
+    import shapely as sh
+
+    packed = json.loads(
+        gzip.decompress((ROOT / "assets/shiba-pavement.gz").read_bytes())
+    )
+    guides = []
+    for key in ("tactile", "tactileWarn"):
+        v, f = packed["surfaces"][key]
+        tris = (np.asarray(v).reshape(-1, 2) / packed["scale"])[
+            np.asarray(f).reshape(-1, 3)
+        ]
+        guides.extend(sh.polygons(tris))
+    plan(
+        Path(sys.argv[1]),
+        json.loads((ROOT / "assets/shiba-layout.json").read_text()),
+        sh.union_all(guides),
+    )

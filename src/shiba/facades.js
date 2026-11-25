@@ -1,255 +1,124 @@
 import * as T from 'three';
 import roomUrl from '../../assets/shiba-rooms.jpg';
-import templeJoineryUrl from '../../assets/shiba-temple-joinery.jpg';
 
-const styles = ['Curtain wall', 'Ribbon office', 'Porcelain tile', 'Metal sash'];
+const office = ['Curtain wall', 'Ribbon office', 'Porcelain tile', 'Metal sash'];
+const plaster = ['#86959a', '#b9b5a7', '#b49682', '#9fa7a6', '#c3b9a5'];
 
-export function buildingFinish(district, evening, height) {
-  const charts = {};
-  district.traverse((o) => {
-    if (o.isMesh && styles.includes(o.material.name)) charts[o.material.name] = o.material;
-  });
-  const detail = charts['Metal sash'],
-    stone = district.getObjectByName('building-foundations');
-  let baseStone;
-  stone?.traverse((o) => {
-    if (o.isMesh) baseStone = o.material.map;
-  });
-  function compose(property) {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 2048;
-    const ctx = canvas.getContext('2d');
-    styles.forEach((name, i) =>
-      ctx.drawImage(charts[name][property].image, (i % 2) * 1024, (1 - Math.floor(i / 2)) * 1024, 1024, 1024),
-    );
-    const atlas = new T.CanvasTexture(canvas);
-    atlas.colorSpace = T.SRGBColorSpace;
-    atlas.anisotropy = 8;
-    return atlas;
-  }
-  const facadeChart = compose('map'),
-    windowChart = compose('emissiveMap');
+// fit is the unclamped position inside a whole-bay rectangle proven to lie in the surveyed polygon.
+export function buildingFinish(district, evening) {
   const rooms = new T.TextureLoader().load(roomUrl);
   rooms.colorSpace = T.SRGBColorSpace;
   rooms.anisotropy = 8;
-  // Project a viewing ray into a shallow virtual room for each metre-scaled bay.
-  // Frame and masonry pixels retain the measured albedo and specular response.
-  const roomCode = `uniform float evening;uniform sampler2D roomChart;
-    float windowSeed(vec2 p){return fract(sin(dot(p,vec2(13.17,79.31)))*4375.873);}
-    vec3 interior(vec2 metres, vec3 normal,vec2 tanAxis, vec3 world, vec3 base, float glass){
-      vec2 bay=metres/vec2(2.4,3.3), id=floor(bay), f=fract(bay);
+  const walls = new Map();
+  district.traverse((o) => {
+    if (o.isMesh) walls.set(o.material.name, o.material);
+  });
+  const stone = walls.get('Foundation concrete')?.map;
+  const roomCode = `
+    uniform float evening;
+    uniform sampler2D roomChart;
+    float seed(vec2 cell) {
+      vec3 p=fract(vec3(cell.xyx)*vec3(.1031,.1030,.0973));
+      p+=dot(p,p.yzx+33.33);
+      return fract((p.x+p.y)*p.z);
+    }
+    vec3 interior(vec2 bay, vec3 n, vec2 axis, vec3 world, vec3 albedo, float glazing){
+      vec2 id=floor(bay), f=fract(bay);
+      vec2 wallID=floor((world.xz-axis*dot(world.xz,axis))*.31+vec2(.03));
+      float r=seed(id+wallID), r2=seed(id.yx+wallID+37.);
       vec3 eye=normalize(cameraPosition-world);
-      vec2 slope=vec2(dot(eye.xz,tanAxis),eye.y)/max(.26,abs(dot(eye,normal)));
-      vec2 ray=clamp(-slope*vec2(.56,.42),vec2(-1.7),vec2(1.7));
+      vec2 ray=-vec2(dot(eye.xz,axis),eye.y)/max(.26,abs(dot(n,eye)))*vec2(.49,.32);
       vec2 bound=(mix(vec2(.02),vec2(.98),step(vec2(0.),ray))-f)/(ray+vec2(.0001));
-      float depth=clamp(min(bound.x,bound.y),0.,1.);
-      vec2 sampleAt=clamp(f+depth*ray,vec2(.018),vec2(.982));
-      float floorSeed=windowSeed(vec2(floor(id.x/4.),id.y)),seed=windowSeed(id);
-      vec2 chartCell=vec2(step(.51,seed),step(.55,floorSeed));
-      vec3 room=texture2D(roomChart,(chartCell+sampleAt)*.5).rgb;
-      float blind=step(.72,seed)*step(.48+.35*floorSeed,f.y);
-      float lit=smoothstep(.38,.72,.65*floorSeed+.35*seed);
-      vec3 tint=mix(vec3(.70,.85,1.),vec3(1.08,.85,.57),floorSeed);
-      vec3 panes=base*(.69+.25*pow(1.-abs(dot(eye,normal)),3.))+room*tint*(.19+.62*evening*lit)*(1.-.89*blind);
-      return mix(base,panes,clamp(glass,0.,1.)*(1.-smoothstep(32.,120.,distance(world,cameraPosition))));
-    }`;
-  const joinery = new T.TextureLoader().load(templeJoineryUrl);
-  joinery.colorSpace = T.SRGBColorSpace;
-  joinery.wrapS = joinery.wrapT = T.RepeatWrapping;
-  joinery.anisotropy = 8;
-  const dem = new T.DataTexture(
-    Float32Array.from(height.gradeCm, (v) => v * 0.01),
-    height.w,
-    height.h,
-    T.RedFormat,
-    T.FloatType,
-  );
-  dem.needsUpdate = true;
-  const gradeDecl = `uniform highp sampler2D gradeGrid;float baseZ(vec3 p){
-    vec2 q=clamp((vec2(p.x,-p.z)-vec2(${height.x.toFixed(1)},${height.y.toFixed(1)}))/${height.step.toFixed(1)},vec2(0.),vec2(${height.w - 1.001},${height.h - 1.001}));
-    ivec2 i=ivec2(q);vec2 f=fract(q);return (1.-max(f.x,f.y))*texelFetch(gradeGrid,i,0).r+max(0.,f.x-f.y)*texelFetch(gradeGrid,i+ivec2(1,0),0).r+
-    max(0.,f.y-f.x)*texelFetch(gradeGrid,i+ivec2(0,1),0).r+min(f.x,f.y)*texelFetch(gradeGrid,i+ivec2(1,1),0).r;}`;
-  const plinth = `float rise=wallXYZ.y-baseZ(wallXYZ);
-    vec2 block=vec2(dot(wallXYZ.xz,tangent)/1.16,rise/.38);
-    block.x+=.5*mod(floor(block.y),2.);vec2 margin=min(fract(block),1.-fract(block));
-    float seam=smoothstep(.003,.015,min(margin.x,margin.y));
-    vec3 stoneFinish=texture2D(stoneDetail,vec2(dot(wallXYZ.xz,tangent),wallXYZ.y)/2.4).rgb*(.56+.34*seam);
-    diffuseColor.rgb=mix(diffuseColor.rgb,stoneFinish,wall*(1.-smoothstep(1.08,1.13,rise)));`;
-  // Use the embedded 1024 px charts with their copper, aluminium, glass and masonry colours in all viewers.
+      vec2 uv=clamp(f+clamp(min(bound.x,bound.y),0.,1.)*ray,.02,.98);
+      uv.x=mix(uv.x,1.-uv.x,step(.5,r2));
+      uv=vec2(.024)+.95*(uv*mix(.68,.98,r2)+vec2(r,1.-r)*(.31-.30*r2));
+      vec2 cell=vec2(step(.5,r),step(.5,r2));
+      vec3 room=texture2D(roomChart,(cell+uv)*.5).rgb;
+      float blind=step(.72,r2)*smoothstep(.30+.43*r,.34+.43*r,f.y);
+      vec3 tint=mix(vec3(.69,.82,.87),vec3(1.12,.81,.57),r2);
+      vec3 pane=albedo*(.74+.24*pow(1.-abs(dot(n,eye)),3.))+
+        tint*room*(.12+.5*evening*smoothstep(.38,.72,r))*(1.-.91*blind);
+      return mix(albedo,pane,glazing*(1.-smoothstep(32.,115.,length(world-cameraPosition))));
+    }
+  `;
   return (mat) => {
-    const plain = styles.includes(mat.name);
-    const sacred = mat.name.startsWith('Temple Facade');
-    const tower = mat.name.startsWith('Tower Facade');
     if (mat.map) mat.map.anisotropy = 8;
-    if (mat.name === 'FootTown glazing') {
-      mat.onBeforeCompile = (sh) => {
-        Object.assign(sh.uniforms, { roomChart: { value: rooms }, evening });
-        sh.vertexShader =
-          'varying vec3 ftWorld,ftNormal;\n' +
-          sh.vertexShader.replace(
-            '#include <begin_vertex>',
-            '#include <begin_vertex>\nftWorld=(modelMatrix*vec4(transformed,1.)).xyz;ftNormal=mat3(modelMatrix)*normal;',
-          );
-        sh.fragmentShader =
-          roomCode +
-          'varying vec3 ftWorld,ftNormal;\n' +
-          sh.fragmentShader
-            .replace(
-              '#include <map_fragment>',
-              `#include <map_fragment>
-          vec3 N=normalize(ftNormal);vec2 tangent=normalize(vec2(-N.z,N.x)+.0001);
-          vec2 metric=vec2(dot(ftWorld.xz,tangent)*1.22,ftWorld.y);
-          vec3 panes=interior(metric,N,tangent,ftWorld,diffuseColor.rgb+vec3(.035,.050,.050),1.);
-          diffuseColor.rgb=panes;`,
-            )
-            .replace(
-              '#include <emissivemap_fragment>',
-              '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=panes*(.13+.50*evening);',
-            );
-      };
-      mat.customProgramCacheKey = () => 'foottown-room-glass';
-      return;
-    }
-    if (plain) {
-      mat.onBeforeCompile = (sh) => {
-        Object.assign(sh.uniforms, {
-          roomChart: { value: rooms },
-          evening,
-          gradeGrid: { value: dem },
-          stoneDetail: { value: baseStone },
-        });
-        sh.vertexShader =
-          'varying vec3 wallXYZ,wallN;\n' +
-          sh.vertexShader.replace(
-            '#include <begin_vertex>',
-            '#include <begin_vertex>\nwallXYZ=(modelMatrix*vec4(transformed,1.)).xyz;wallN=mat3(modelMatrix)*normal;',
-          );
-        sh.fragmentShader =
-          'varying vec3 wallXYZ,wallN;uniform sampler2D stoneDetail;' +
-          roomCode +
-          gradeDecl +
-          '\n' +
-          sh.fragmentShader
-            .replace(
-              '#include <map_fragment>',
-              `#include <map_fragment>
-            vec3 n=normalize(wallN);float wall=1.-smoothstep(.28,.65,abs(n.y));vec2 tangent=normalize(vec2(-n.z,n.x)+.00001);
-            diffuseColor.rgb=interior(vec2(dot(wallXYZ.xz,tangent),wallXYZ.y),n,tangent,wallXYZ,diffuseColor.rgb,wall*smoothstep(.05,.31,(diffuseColor.b-diffuseColor.r)*5.+.08));
-            ${plinth}`,
-            )
-            .replace(
-              '#include <emissivemap_fragment>',
-              '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= evening*smoothstep(1.10,1.25,rise);',
-            )
-            .replace(
-              '#include <roughnessmap_fragment>',
-              `#include <roughnessmap_fragment>
-            float reflection=clamp((diffuseColor.b-diffuseColor.r)*5.+.10,0.,1.);
-            roughnessFactor=mix(.80,.34,reflection);`,
-            );
-      };
-      mat.customProgramCacheKey = () => 'japan-metric-facade';
-      return;
-    }
-    if (!detail || !baseStone) return;
+    const ft = mat.name === 'FootTown glazing',
+      park = mat.name === 'Park joinery',
+      temple = mat.name === 'Temple joinery';
+    if (!(ft || park || temple || office.includes(mat.name))) return;
+    const tint = new T.Color(plaster[park || temple ? 4 : Math.max(0, office.indexOf(mat.name))]);
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, {
-        roomChart: { value: rooms },
-        panes: { value: facadeChart },
-        litPanes: { value: windowChart },
-        gradeGrid: { value: dem },
-        stoneDetail: { value: baseStone },
-        templeJoinery: { value: joinery },
         evening,
+        roomChart: { value: rooms },
+        stoneFinish: { value: stone },
+        renderTint: { value: tint },
       });
       sh.vertexShader =
-        'attribute float _facade_style; varying float styleId;varying vec3 wallXYZ; varying vec3 surveyN;\n' +
+        `varying vec3 wallWorld,wallNormal;
+        ${ft ? '' : 'attribute float _panel_u,_panel_v,_plinth; varying vec2 wallFit; varying float aboveBase;'}
+        ` +
         sh.vertexShader.replace(
           '#include <begin_vertex>',
-          '#include <begin_vertex>\nwallXYZ=(modelMatrix*vec4(transformed,1.)).xyz;surveyN=mat3(modelMatrix)*normal;styleId=_facade_style;',
+          `#include <begin_vertex>
+          wallWorld=(modelMatrix*vec4(transformed,1.)).xyz;
+          wallNormal=mat3(modelMatrix)*normal;
+          ${ft ? '' : 'wallFit=vec2(_panel_u,_panel_v);aboveBase=wallWorld.y-_plinth;'}`,
         );
       sh.fragmentShader =
         roomCode +
-        gradeDecl +
-        '\nvarying float styleId;varying vec3 wallXYZ,surveyN;uniform sampler2D panes,litPanes,stoneDetail,templeJoinery;\n' +
+        `varying vec3 wallWorld,wallNormal;
+        uniform sampler2D stoneFinish; uniform vec3 renderTint;
+        ${ft ? '' : 'varying vec2 wallFit; varying float aboveBase;'}
+        ` +
         sh.fragmentShader
           .replace(
             '#include <map_fragment>',
             `#include <map_fragment>
-          vec3 n=normalize(surveyN),aw=abs(n),weights=pow(aw,vec3(6.));
-          weights/=max(dot(weights,vec3(1.)),.0001);
-          float nearWall=1.-smoothstep(75.,230.,distance(wallXYZ,cameraPosition));
-          float wall=1.-smoothstep(.28,.68,aw.y);
-          // Triplanar fine aggregate and a metre-true tangent projection for the straight window frames.
-          float grit=dot(weights,vec3(texture2D(stoneDetail,wallXYZ.zy/.83).r,
-            texture2D(stoneDetail,wallXYZ.xz/.83).r,texture2D(stoneDetail,wallXYZ.xy/.83).r));
-          vec2 tangent=normalize(vec2(-n.z,n.x)+vec2(.000001));if(tangent.x<-.0001)tangent=-tangent;
-          vec2 metric=vec2(dot(wallXYZ.xz,tangent),wallXYZ.y);
-          vec2 st=metric/vec2(19.2,26.4);vec3 photo=diffuseColor.rgb;
-          vec2 cell=vec2(mod(floor(styleId+.5),2.),floor((styleId+.5)/2.));vec2 atlasUV=(cell+.003+fract(st)*.994)/2.;
-          vec3 chart=textureGrad(panes,atlasUV,dFdx(st)*.497,dFdy(st)*.497).rgb;
-          float wallLight=dot(photo,vec3(.22,.70,.08));
+          vec3 N=normalize(wallNormal); vec2 axis=normalize(vec2(-N.z,N.x)+.00001);
+          vec2 metres=vec2(dot(wallWorld.xz,axis),wallWorld.y);
           ${
-            sacred || tower
+            ft
               ? `
-          float grain=sin(metric.x*49.+sin(metric.y*2.2)*1.5)*.045+(grit-.084)*1.25;
-          float tileWave=cos(dot(wallXYZ.xz,vec2(.993,-.12))*32.)*.080;
-          diffuseColor.rgb=photo*(1.+nearWall*mix(tileWave,grain,wall));
-          ${
-            sacred
-              ? `
-          float roll=fract(metric.x/.29);
-          float ridge=.68+.38*smoothstep(.22,.43,roll)*(1.-smoothstep(.55,.79,roll));
-          float joint=1.-.20*(1.-smoothstep(.011,.041,abs(fract(metric.y/.37)-.5)));
-          vec3 roof=mix(photo,vec3(.115,.130,.136),.55)*ridge*joint;
-          diffuseColor.rgb=mix(diffuseColor.rgb,roof,(1.-wall)*(.50+.40*nearWall));
-          vec3 lattice=texture2D(templeJoinery,(metric-vec2(0.,7.5))/vec2(7.2,3.3)).rgb;
-          vec3 wood=lattice*(.75+.42*clamp(wallLight*1.7,0.,1.))+.055*photo;
-          float rise=wallXYZ.y-baseZ(wallXYZ);
-          vec3 foot=texture2D(stoneDetail,metric/2.4).rgb*.86;
-          wood=mix(foot,wood,smoothstep(.40,.46,rise));
-          diffuseColor.rgb=mix(diffuseColor.rgb,wood,wall*(.55+.32*nearWall));`
-              : ''
-          }
-          ${
-            tower
-              ? `
-          float gallery=wall*max(step(138.,wallXYZ.y)*(1.-step(150.,wallXYZ.y)),step(242.,wallXYZ.y)*(1.-step(270.,wallXYZ.y)));
-          float glazing=max(step(141.9,wallXYZ.y)*(1.-step(146.4,wallXYZ.y)),step(258.7,wallXYZ.y)*(1.-step(263.5,wallXYZ.y)));
-          float pane=fract(metric.x/1.22),frame=1.-smoothstep(.02,.057,min(pane,1.-pane));
-          float metal=clamp(.54+grit*1.8+.10*cos(metric.y*8.),.42,.83);
-          vec3 cladding=mix(photo,vec3(.22,.26,.27)*metal,.52);
-          vec3 glass=mix(vec3(.048,.086,.106)+photo*.24,vec3(.19,.23,.24),frame);
-          diffuseColor.rgb=mix(diffuseColor.rgb,mix(cladding,glass,glazing),gallery*.93);`
-              : ''
-          }`
+            diffuseColor.rgb=interior(metres/vec2(1.84,3.65),N,axis,wallWorld,diffuseColor.rgb,1.);
+          `
               : `
-          vec2 metersPerPixel=vec2(length(dFdx(wallXYZ)),length(dFdy(wallXYZ)));
-          vec2 texelsPerPixel=vec2(length(dFdx(vMapUv)),length(dFdy(vMapUv)))*vec2(textureSize(map,0));
-          float density=min(texelsPerPixel.x/max(metersPerPixel.x,.0001),texelsPerPixel.y/max(metersPerPixel.y,.0001));
-          float lowDensity=1.-smoothstep(11.,38.,density);
-          float bay=dot(chart,vec3(.23,.68,.09));
-          photo=max(photo,vec3(.018,.020,.023));
-          vec3 transferred=(.035+.90*photo)*clamp(.49+3.55*bay,.48,1.66);
-          vec3 finished=mix(transferred,chart,.24+.22*lowDensity);
-          diffuseColor.rgb=mix(photo,finished,wall*(.34+.45*lowDensity+.18*nearWall));
-          diffuseColor.rgb*=1.+nearWall*(grit-.084)*.70;
-          diffuseColor.rgb=interior(metric,n,tangent,wallXYZ,diffuseColor.rgb,wall*clamp(.22+(chart.b-chart.r)*4.8,0.,1.));
-          ${plinth}`
+            float whole=step(0.,min(min(wallFit.x,wallFit.y),min(1.-wallFit.x,1.-wallFit.y)));
+            vec3 aggregate=texture2D(stoneFinish,metres/2.4).rgb;
+            float noise=clamp((aggregate.g-.085)*.73,-.055,.06);
+            vec2 skin=metres/vec2(1.6,.64);
+            skin.x+=.5*mod(floor(skin.y),2.);
+            vec2 cell=fract(skin), aa=max(fwidth(skin),vec2(.001));
+            vec2 jointFade=smoothstep(vec2(.004)-aa,vec2(.009)+aa,min(cell,1.-cell));
+            float panelTone=seed(floor(skin)+floor(dot(wallWorld.xz,N.xz)))*.072;
+            vec3 render=renderTint*(.88+noise+panelTone+.055*min(jointFade.x,jointFade.y));
+            render*=.88+.12*smoothstep(.005,.027,abs(fract((aboveBase-.60)/3.3)-.5));
+            vec2 seam=abs(fract(metres/vec2(1.35,.55))-.5);
+            float joint=1.-smoothstep(.476,.499,max(seam.x,seam.y));
+            vec3 plinth=mix(vec3(.078,.086,.085),aggregate,.33)*(.83+.17*joint);
+            vec3 base=mix(${park || temple ? 'mix(aggregate,render,.72)' : 'plinth'},render,smoothstep(-.012,.012,aboveBase));
+            ${
+              park || temple
+                ? ''
+                : `vec2 bay=vMapUv*8.;
+              float glazing=smoothstep(.028,.11,diffuseColor.b-diffuseColor.r+.016);
+              diffuseColor.rgb=interior(bay,N,axis,wallWorld,diffuseColor.rgb,glazing);
+              float belt=fract(bay.y);
+              diffuseColor.rgb*=1.-.16*(1.-smoothstep(.018,.047,belt))+.12*smoothstep(.965,.988,belt);
+            `
+            }
+            diffuseColor.rgb=mix(base,diffuseColor.rgb,whole);
+          `
           }`,
-          )
-          .replace(
-            '#include <roughnessmap_fragment>',
-            `#include <roughnessmap_fragment>
-        roughnessFactor=mix(roughnessFactor,.76-.30*clamp((chart.b-chart.r)*5.+.2,0.,1.),wall*nearWall);`,
           )
           .replace(
             '#include <emissivemap_fragment>',
             `#include <emissivemap_fragment>
-        ${sacred || tower ? '' : 'totalEmissiveRadiance+=textureGrad(litPanes,atlasUV,dFdx(st)*.497,dFdy(st)*.497).rgb*wall*smoothstep(1.1,1.25,rise)*evening*(.20+.17*(1.-smoothstep(.05,.4,wallLight)));'}`,
+            ${ft ? 'totalEmissiveRadiance+=diffuseColor.rgb*(.06+.17*evening);' : 'totalEmissiveRadiance*=whole*evening;'}
+          `,
           );
     };
-    mat.customProgramCacheKey = () =>
-      tower ? 'survey-tower-gallery' : sacred ? 'survey-temple-grain' : 'survey-facade-details';
+    mat.customProgramCacheKey = () => 'fitted-wall-' + mat.name;
   };
 }

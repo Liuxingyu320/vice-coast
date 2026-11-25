@@ -71,7 +71,8 @@ def build(cache):
         for n in district.nodes
         if n in core_objects or n.startswith("brid_")
     ]
-    names.append((GLB(assets / "shiba-pavement.glb"), "paving-bank"))
+    banks = GLB(assets / "shiba-pavement.glb")
+    names.extend((banks, name) for name in ("paving-bank", "paving-bank-rail"))
     names.extend(
         (horizon, n)
         for n, node in horizon.nodes.items()
@@ -193,6 +194,9 @@ def build(cache):
     buildings = sh.union_all(
         [Polygon(f["rings"][0], f["rings"][1:]).buffer(0) for f in d["footprints"]]
     )
+    buildings = buildings.union(
+        sh.union_all([Polygon(q) for q in d["bearingFootprints"]])
+    )
     walks = (
         roads.buffer(3.2, quad_segs=12)
         .difference(sh.union_all([roads, buildings, stairvoid]))
@@ -205,7 +209,19 @@ def build(cache):
             for r in [poly.exterior, *poly.interiors]
         ]
 
+    # Store the already tessellated 1:12 apron so wheels and feet follow exactly the rendered triangles.
+    import gzip
+
+    paving = json.loads(gzip.decompress((assets / "shiba-pavement.gz").read_bytes()))
+    xy, triangles = paving["surfaces"]["apron"]
+    apron = {
+        "scale": paving["scale"],
+        "xy": xy,
+        "tenthsMm": [int(round(q * 10000)) for q in paving["apronLift"]],
+        "triangles": triangles,
+    }
     payload = dict(
+        aprons=apron,
         travelBoundary=edge["boundary"],
         solids=[encode(p) for p in polys],
         wells=[encode(p) for p in wells],

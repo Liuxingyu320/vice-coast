@@ -17,7 +17,15 @@ def detail_materials(obj, feature, assets, cache):
             "Porcelain tile",
             "FootTown glazing",
         )
-        if not (terrain or photo or modern):
+        fitted = base.name in (
+            "Temple joinery",
+            "Park joinery",
+            "Curtain wall",
+            "Metal sash",
+            "Ribbon office",
+            "Porcelain tile",
+        )
+        if not (terrain or photo or modern or fitted):
             continue
         key = ("Terrain detail · " if terrain else "Survey detail · ") + base.name
         if key in cache:
@@ -157,6 +165,46 @@ def detail_materials(obj, feature, assets, cache):
             )
             if base.name == "FootTown glazing":
                 bs.inputs["Roughness"].default_value = 0.25
+        if fitted:
+
+            def scalar(op, a, b):
+                fn = node("ShaderNodeMath")
+                fn.operation = op
+                for i, val in enumerate((a, b)):
+                    if isinstance(val, (int, float)):
+                        fn.inputs[i].default_value = val
+                    else:
+                        link(val, fn.inputs[i])
+                return fn.outputs[0]
+
+            def field(name):
+                attr = node("ShaderNodeAttribute")
+                attr.attribute_name = name
+                return attr.outputs["Fac"]
+
+            mask = 1.0
+            for name in ("_PANEL_U", "_PANEL_V"):
+                v = field(name)
+                mask = scalar(
+                    "MULTIPLY",
+                    mask,
+                    scalar(
+                        "MULTIPLY",
+                        scalar("GREATER_THAN", v, 0.0),
+                        scalar("LESS_THAN", v, 1.0),
+                    ),
+                )
+            z = node("ShaderNodeSeparateXYZ")
+            link(position, z.inputs[0])
+            above = scalar("GREATER_THAN", z.outputs["Z"], field("_PLINTH"))
+            stone = node("ShaderNodeRGB")
+            stone.outputs[0].default_value = (0.085, 0.089, 0.084, 1)
+            render = node("ShaderNodeRGB")
+            render.outputs[0].default_value = (0.39, 0.37, 0.31, 1)
+            current = bs.inputs["Base Color"].links[0].from_socket
+            surround = mix(stone.outputs[0], render.outputs[0], above)
+            link(mix(surround, current, mask), bs.inputs["Base Color"])
+            link(scalar("MULTIPLY", mask, 0.16), bs.inputs["Emission Strength"])
         grain = node("ShaderNodeTexNoise")
         grain.inputs["Scale"].default_value = 92 if terrain else 76
         grain.inputs["Detail"].default_value = 2

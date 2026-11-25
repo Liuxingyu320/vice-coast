@@ -145,6 +145,7 @@ export function createLighting(renderer, scene, district, car, height) {
     }
     const mat = o.material,
       name = mat.name;
+    if (name === 'Park joinery' || name === 'Temple joinery') finish(mat);
     if (name === 'FootTown glazing') {
       mat.roughness = 0.23;
       mat.metalness = 0.23;
