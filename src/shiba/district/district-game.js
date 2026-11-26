@@ -10,7 +10,9 @@ import {buildNavigation} from './navigation.js';
 import {DistrictStory} from './district-story.js';
 import {DistrictInterface} from './district-interface.js';
 import {mapOutline} from './map-outline.js';
+import {createAtlas} from './atlas.js';
 import {createRadar} from './radar.js';
+import {neighborhoods} from './neighborhoods.js';
 import {streetSpawn} from './district-places.js';
 
 const poseKey='vicecoast.shiba.street.1';
@@ -47,7 +49,14 @@ class DistrictGame {
     this.hero=makePerson('rico');this.hero.name='里科';shadow(this.hero,1.08,.65);this.scene.add(this.hero);
     this.resetCamera();this.syncHero();
     this.outline=mapOutline(nav.boundary.rings,nav.ground,$('map-outline'));
-    this.radar=createRadar($('street-map').querySelector('canvas'),this.manifest.bounds,roads.edges,nav.land,nav.boundary.rings);
+    const radar=createRadar($('street-map').querySelector('canvas'),this.manifest.bounds,roads.edges,nav.land,nav.boundary.rings);
+    this.radar=radar.draw;this.showAtlas=createAtlas(this.scene,this.manifest.bounds,radar.base);
+    this.places=neighborhoods(this.layout);
+    this.mapNames=this.places.filter(p=>['六本木','麻布十番','虎之门','新桥','三田','赤坂','竹芝','东京塔'].includes(p.name)).map(place=>{
+      const el=document.createElement('span');el.textContent=place.name;$('map-neighborhoods').append(el);return {el,place};
+    });
+    $('map-area').textContent='边界内 '+(this.layout.areaM2/1e6).toFixed(2)+' 平方公里';
+    $('map-focus').onclick=()=>this.frameMap(this.camera.position.distanceTo(this.controls.target)<this.fullMapDistance()*.65);
     this.ui=new DistrictInterface(this);
     this.world={venues:{partyMood:on=>{this.story.stageLight.intensity=on?27:0;}}};
     const ui=this.ui;
@@ -59,7 +68,7 @@ class DistrictGame {
     });
     this.streetRadius=Number(params.get('radius'))||420;this.isMap=false;
     this.overviewRadius=Math.max(850,this.streetRadius);this.controls.enabled=false;this.controls.enableDamping=false;
-    this.controls.enableRotate=false;this.controls.minDistance=80;this.controls.maxDistance=2100;
+    this.controls.enableRotate=false;this.controls.minDistance=80;this.controls.maxDistance=this.fullMapDistance()*1.35;
     this.controls.mouseButtons.LEFT=T.MOUSE.PAN;this.controls.touches.ONE=T.TOUCH.PAN;
     this.setMap(params.get('view')==='map');
     if(!this.isMap&&(!this.story.s.active||this.story.s.stage==='new'))this.story.start();
@@ -105,18 +114,29 @@ class DistrictGame {
   syncHero(){
     this.hero.visible=!this.inCar;this.hero.position.set(this.pos.x,this.floor+.018,this.pos.z);this.hero.rotation.y=this.pos.a;
   }
+  fullMapDistance(){
+    const b=this.manifest.bounds,t=Math.tan(26*Math.PI/180),aspect=Math.max(.22,this.camera.aspect);
+    return Math.max((b.maxX-b.minX)/aspect,b.maxZ-b.minZ)/(2*t)*1.13;
+  }
+  frameMap(full){
+    const b=this.manifest.bounds;
+    const x=full?(b.minX+b.maxX)/2:this.pos.x,z=full?(b.minZ+b.maxZ)/2:this.pos.z;
+    const h=this.nav.ground(x,z),rise=full?this.fullMapDistance():330;
+    this.controls.target.set(x,h,z);this.camera.position.set(x,h+rise,z+rise*(full?.12:.43));
+    this.controls.update();this.updateMap();
+  }
   setMap(on){
     this.clearKeys();this.isMap=on;this.controls.enabled=on;this.outline.visible=on;
+    this.streamer.overview=on;this.scene.fog.density=on?.000055:.00049;
     this.streamer.radius=on?this.overviewRadius:this.streetRadius;
-    this.camera.near=on?1:.12;this.camera.fov=on?52:63;this.camera.updateProjectionMatrix();
+    this.controls.maxDistance=this.fullMapDistance()*1.35;
+    this.camera.far=on?Math.max(9000,this.controls.maxDistance*1.6):4900;
+    this.camera.near=on?2:.12;this.camera.fov=on?52:63;this.camera.updateProjectionMatrix();
     document.body.classList.toggle('district-map',on);$('game-map-panel').hidden=!on;$('back-to-character').hidden=!on;
     if(on){
-      const p=this.pos;
-      this.controls.target.set(p.x,this.floor,p.z);this.camera.position.set(p.x,this.floor+285,p.z+145);
-      this.controls.update();this.story.group.visible=false;
-      this.updateMap();
+      this.story.group.visible=false;this.frameMap(true);
     }else{
-      this.story.group.visible=true;
+      this.showAtlas(this.camera,false);this.streetMapAtlas=false;this.story.group.visible=true;
       if(!this.loading&&(!this.story.s.active||this.story.s.stage==='new'))this.story.start();
       this.streetCamera();this.ui.refresh();
     }
@@ -126,13 +146,23 @@ class DistrictGame {
     const edge=this.nav.boundary.locate(ref.x,-ref.z);
     const x=edge.inside?ref.x:edge.x,z=edge.inside?ref.z:-edge.y;
     this.camera.position.x+=x-ref.x;this.camera.position.z+=z-ref.z;ref.x=x;ref.z=z;
-    this.controls.update();this.camera.updateMatrixWorld();this.outline.draw(this.camera);
+    this.controls.update();this.camera.updateMatrixWorld();
+    const distance=this.camera.position.distanceTo(ref);
+    this.streetMapAtlas=distance>1200;this.showAtlas(this.camera,this.streetMapAtlas);
+    this.outline.draw(this.camera,this.streetMapAtlas);
+    const metres=distance>2900?500:distance>900?200:distance>380?100:50;
+    point.set(ref.x,0,ref.z).project(this.camera);const sx=point.x;
+    point.set(ref.x+metres,0,ref.z).project(this.camera);
+    $('map-scale').style.width=Math.max(20,(point.x-sx)*innerWidth/2)+'px';
+    $('map-scale').textContent=metres+' 米';
     const marker=(id,loc)=>{
-      const el=$(id);if(!loc){el.hidden=true;return;}
-      point.set(loc.x,this.height(loc.x,loc.z)+2,loc.z).project(this.camera);
+      const el=typeof id==='string'?$(id):id;if(!loc){el.hidden=true;return;}
+      point.set(loc.x,this.streetMapAtlas?0:this.height(loc.x,loc.z)+2,loc.z).project(this.camera);
       el.hidden=Math.abs(point.x)>1||Math.abs(point.y)>1||point.z>1;
       el.style.left=(50+50*point.x)+'%';el.style.top=(50-50*point.y)+'%';
     };
+    $('map-focus').textContent=distance<this.fullMapDistance()*.65?'查看全域':'定位里科';
+    for(const {el,place} of this.mapNames)marker(el,distance>950?place:null);
     marker('map-player',this.pos);marker('map-objective',this.story.target);
     marker('map-vehicle',this.car&&!this.inCar?this.car.position:null);
     $('map-objective-label').textContent=this.story.journal;

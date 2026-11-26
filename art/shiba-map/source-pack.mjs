@@ -9,7 +9,7 @@ const directory=onlyCode?'东京湾街区-游戏源码':'东京湾街区-游戏�
 const target=path.resolve(process.argv.slice(2).find(p=>p!=='--code-only')??'../'+directory+'.zip');
 const {html,inputs}=await buildMap();
 const files=new Set([...inputs,'build.mjs','package.json','package-lock.json','README.md','东京塔与芝公园全景.html',
-  'checks/shiba-survey.mjs','checks/shiba-game-browser.mjs','src/shell.html','src/style.css',
+  'checks/shiba-survey.mjs','checks/shiba-routes.mjs','checks/shiba-region-browser.mjs','checks/shiba-game-browser.mjs','src/shell.html','src/style.css',
   'assets/shiba-cover.webp','assets/tokyo-night.webp','art/shiba/sources.md']);
 for(const dir of ['art/shiba-map','src/shiba/district','assets/shiba-game']){
   for(const entry of await readdir(dir,{withFileTypes:true}))if(entry.isFile()&&!entry.name.startsWith('.'))files.add(dir+'/'+entry.name);

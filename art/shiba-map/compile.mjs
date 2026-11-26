@@ -1,3 +1,5 @@
+import {surveyHeight} from '../../src/shiba/terrain.js';
+import {addRegion} from './region.mjs';
 import {trimBoundary} from './boundary.mjs';
 import {bakeGateSupports} from './gate-collision.mjs';
 import {createHash} from 'node:crypto';
@@ -8,7 +10,7 @@ import {zipSync} from 'three/addons/libs/fflate.module.js';
 
 export const cellSize = 160;
 export const surveyInputs = ['assets/shiba-park.glb','assets/shiba-pavement.glb','assets/shiba-horizon.glb',
-  'assets/shiba-layout.json','assets/shiba-solids.json','assets/shiba-hall-steps.json','assets/shiba-game/skyline.json.gz','assets/shiba-game/land.json','assets/shiba-gate-supports.json'];
+  'assets/shiba-layout.json','assets/shiba-solids.json','assets/shiba-hall-steps.json','assets/shiba-game/skyline.json.gz','assets/shiba-game/land.json','assets/shiba-gate-supports.json','assets/shiba-game/region.json.gz','assets/shiba-game/region-streets.json.gz'];
 const align = n => Math.ceil(n/4)*4;
 const stamp = new Date(2020,0,1);
 const field = {POSITION:['position',3],NORMAL:['normal',3],TEXCOORD_0:['uv',2],
@@ -131,13 +133,14 @@ function registerMaterials(doc,bin,files,materials,known){
 }
 
 // Keep courtyards open in both the roof triangulation and the vertical inner walls.
-function compileSkyline(records,tiles){
+function compileSkyline(records,tiles,detailIndices,solidIndices,grid){
   const districts=new Map();
-  for(const [low,high,rings] of records){
+  for(const [index,[low,high,rings]] of records.entries()){
     const contours=rings.map(r=>r.map(([x,z])=>new Vector2(x/10,z/10)));
     const outer=contours[0], points=contours.flat();
+    const foot=p=>solidIndices.has(index)?Math.min(low/10,surveyHeight(grid,p.x,-p.y)-.22):low/10;
     const ix=outer.reduce((n,p)=>n+p.x,0)/outer.length, iz=outer.reduce((n,p)=>n+p.y,0)/outer.length;
-    const key='blocks/'+cell(ix,iz);
+    const key='blocks/'+cell(ix,iz)+' '+(detailIndices.has(index)?'survey':'outline');
     if(!districts.has(key))districts.set(key,{p:[],n:[],idx:[]});
     const chunk=districts.get(key), base=chunk.p.length/3;
     for(const p of points){chunk.p.push(p.x,high/10,p.y);chunk.n.push(0,127,0);}
@@ -148,7 +151,7 @@ function compileSkyline(records,tiles){
         const a=ring[j],b=ring[(j+1)%ring.length],dx=b.x-a.x,dz=b.y-a.y,len=Math.hypot(dx,dz);
         if(len<.01)continue;
         const v=chunk.p.length/3;
-        chunk.p.push(a.x,low/10,a.y,a.x,high/10,a.y,b.x,high/10,b.y,b.x,low/10,b.y);
+        chunk.p.push(a.x,foot(a),a.y,a.x,high/10,a.y,b.x,high/10,b.y,b.x,foot(b),b.y);
         const nx=Math.round(sign*127*dz/len),nz=Math.round(-sign*127*dx/len);
         for(let k=0;k<4;k++)chunk.n.push(nx,0,nz);
         if(sign>0)chunk.idx.push(v,v+1,v+2,v,v+2,v+3);
@@ -156,9 +159,10 @@ function compileSkyline(records,tiles){
       }
     }
   }
-  for(const [key,{p,n,idx}] of districts){
-    tiles.set(key,[{layer:'skyline-outline',material:-1,attributes:{position:Float32Array.from(p),normal:Int8Array.from(n)},
-      indices:p.length/3>65535?Uint32Array.from(idx):Uint16Array.from(idx)}]);
+  for(const [label,{p,n,idx}] of districts){
+    const [key,fine]=label.split(' ');if(!tiles.has(key))tiles.set(key,[]);
+    tiles.get(key).push({layer:fine==='survey'?'skyline-replaced':'skyline-outline',material:-1,attributes:{position:Float32Array.from(p),normal:Int8Array.from(n)},
+      indices:p.length/3>65535?Uint32Array.from(idx):Uint16Array.from(idx)});
   }
 }
 
@@ -175,20 +179,21 @@ export async function compileMap(){
       for(const p of doc.meshes[node.mesh].primitives)partition(p,doc,bin,ids,node.name,materials,tiles,stats,decks);
     }
   }
-  const [layout,solidSource,steps,outlines,areas,gates]=await Promise.all(surveyInputs.slice(3).map(async p=>{
+  const [layout,solidSource,steps,outlines,areas,gates,region,streets]=await Promise.all(surveyInputs.slice(3).map(async p=>{
     const bytes=await readFile(p);return JSON.parse(p.endsWith('.gz')?gunzipSync(bytes):bytes);
   }));
   const physical=bakeGateSupports(solidSource,gates);
-  const originalEdge=physical.travelBoundary??layout.boundary;
+  const originalEdge=region.boundary;
   physical.travelBoundary=trimBoundary(originalEdge);
   stats.boundaryVertices=[originalEdge.length,physical.travelBoundary.length];
   layout.landUse=areas;
-  compileSkyline(outlines,tiles);stats.outlines=outlines.length;
+  addRegion(region,streets,{layout,physical,decks,tiles,layers,materials,stats,outlines});
+  compileSkyline(outlines,tiles,new Set(region.detailedBuildings),new Set(region.solidBuildings),region.height);stats.outlines=outlines.length;
   const bindings=new Map();
   const entries=[...tiles].map(([id,parts])=>{
     for(const p of parts)if(p.material>=0)bindings.set(p.layer+':'+p.material,[p.layer,p.material]);
     files[id+'.bin']=encodeTile(parts);
-    return {id,buildings:parts.some(p=>['Survey buildings','surveyed-skyline','skyline-photofacades'].includes(p.layer))};
+    return {id,persistent:id.startsWith('blocks/')&&parts.some(p=>p.layer==='skyline-outline'),buildings:parts.some(p=>['Survey buildings','surveyed-skyline','skyline-photofacades'].includes(p.layer))};
   });
   const xy=physical.travelBoundary??layout.boundary,x=xy.map(p=>p[0]),z=xy.map(p=>-p[1]);
   const manifest={version:1,cellSize,bounds:{minX:Math.min(...x),maxX:Math.max(...x),minZ:Math.min(...z),maxZ:Math.max(...z)},

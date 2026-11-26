@@ -14,7 +14,7 @@ export function mapOutline(rings,ground,canvas){
     return points;
   });
   let visible=false,lastWidth=0,lastHeight=0;
-  function draw(camera){
+  function draw(camera,flat=false){
     const w=canvas.clientWidth,h=canvas.clientHeight;if(!visible||!w||!h)return;
     matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
     if(w===lastWidth&&h===lastHeight&&previous.equals(matrix))return;
@@ -24,7 +24,7 @@ export function mapOutline(rings,ground,canvas){
     ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
     const boundary=new Path2D();
     for(const path of paths){
-      const points=path.map(p=>p.clone().applyMatrix4(matrix)),clipped=[];
+      const points=path.map(p=>new T.Vector4(p.x,flat?0:p.y,p.z,1).applyMatrix4(matrix)),clipped=[];
       let a=points.at(-1);
       for(const b of points){
         const da=a.z+a.w,db=b.z+b.w;
