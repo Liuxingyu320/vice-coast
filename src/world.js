@@ -2,7 +2,7 @@ import {createVenues} from './venues.js';
 import * as T from 'three';
 import {batcher,canvasTexture} from './models.js';
 import {xs,zs,rng,roadWidth} from './data.js';
-import {studioModel} from './blender-assets.js';
+import {studioModel} from './studio-models.js';
 import layout from '../assets/tokyo-layout.json';
 
 // Timetable in seconds and metres relative to the authored train position.

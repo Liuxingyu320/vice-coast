@@ -1,13 +1,14 @@
 {
-  "name": "vice-coast",
+  "name": "tokyo-bay-shiba-game",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "check:shiba": "node checks/shiba-layout.mjs",
-    "check:city": "node checks/run-city.mjs",
-    "check:shiba-browser": "node checks/shiba-browser.cjs"
+    "check:shiba": "node checks/procedural-shiba.mjs",
+    "check:shiba-browser": "node checks/procedural-shiba-browser.mjs",
+    "postinstall": "npm ci --prefix vendor/procedural-tokyo --legacy-peer-deps --omit=dev --ignore-scripts --no-audit --no-fund",
+    "pack:source": "node art/procedural-shiba/source-pack.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

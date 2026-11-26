@@ -1,47 +1,37 @@
-# 芝公园与东京塔 · SHIBA PARK
+# 东京湾街区 · 芝公园
 
-主菜单的「进入芝公园实景」打开东京港区的米制街景。可以从芝公园步行看东京塔、到增上寺，再沿街向东到大门路口或向南到芝公园站。用「街区地图」可跳转六处地标，按 V 切换街道和全域俯瞰，按 F 切换驾驶，拖动可环视。默认以黄金黄昏进入，可即时切换蓝调初夜和晴朗午后。按 H 查看键位。
+[下载可离线游玩的游戏整合包](https://github.com/Liuxingyu320/vice-coast/releases/download/shiba-game-2026-11-26/tokyo-bay-shiba.zip)。解压后双击包内的 `index.html`。
 
-[打开 Blender 工程](assets/芝公园与东京塔.blend) · [查看街区范围](芝公园地图.webp) · [查看数据来源与建模精度](art/shiba/sources.md)
+打开 `index.html`，里科会在增上寺三解脱门对面的街边步行登场。与玛拉交谈可开始《海浪账本》。封套、演出、母带交接和续章《午夜暗频》都位于这片街区。任务选择、报酬、车库涂装和改装使用原游戏的存档。游戏会另存芝公园的位置，下次从街上步行继续。
 
-主菜单的「东京湾 · 原作剧情」和「东京湾原作漫游」保留虚构的东京湾地图及原作任务。原作地图的[可编辑工程](assets/东京湾街区.blend)包含高架电车动画。
+| 操作 | 按键 |
+| --- | --- |
+| 步行与奔跑 | WASD 或方向键，按住 Shift 奔跑 |
+| 环视 | 拖动游戏画面 |
+| 交谈、调查 | E 或点击场景提示 |
+| 任务手记、街区地图 | J、M，也可点击当前任务或左下角小地图 |
+| 私人车库 | G，在车库选择车辆并呼叫 |
+| 上车、停车后下车 | 靠近车辆按 F |
+| 驾驶 | W 油门、S 刹车／倒车、A 与 D 转向、空格手刹、Shift 加速 |
+| 暂停 | Esc 或 P |
 
-## 本地试玩
+暂停菜单内的「原作章节与委托」可进入原版街区，继续原来的出租车委托、计时赛车与其他活动。两个街区共享任务与余额，各自保存位置。触摸设备提供方向键、交互、车库与驾驶按钮。
 
-从 Git 下载本分支后，在项目目录运行下面两条命令生成离线游戏。
+## 街区来源
+
+建筑、道路、地形和影像取自 Procedural Tokyo 的 Shiba 区域，使用上游真实地图分块。三解脱门按原门楼位置和屋脊朝向重建。近景使用详细模型，远景按建筑轮廓和高程绘制，重复顶点按完整材质属性合并。源数据已清理 2,072 个停车点。玩家叫出的车辆使用东京湾街区原有的模型和驾驶逻辑。[项目源码](https://github.com/jeantimex/tokyo/tree/1984760653e4800adeadcb3505b1e92347415dc3) · [数据来源与许可](assets/procedural-shiba/NOTICE.txt)
+
+## 从源码构建
+
+可直接双击随包附带的 `index.html` 离线游玩。修改源码后，用 Node.js 22.12 或更新版本在项目目录中运行以下命令。
 
 ```sh
 npm ci
 npm run build
+npm run check:shiba
+npm run check:shiba-browser
 ```
 
-用浏览器打开生成的 `index.html`。游戏资源已经打包进该文件，可以离线玩。进度保存在当前浏览器里。
+`check:shiba` 校验地图分块、停车点和模型索引。浏览器测试用本机 Chrome 的临时档案验证步行、任务、叫车、驾驶、存档、原作入口和触屏操作。可用 `CHROME_BIN` 指定 Chrome，用 `GAME_SCREENSHOTS` 指定实机截图输出目录。
 
-- **WASD / 方向键**移动或开车。原作剧情中按 **E** 交谈和互动，**F** 上下车。
-- **M** 查看地图。原作剧情中 **J** 查看工作，**G** 打开车库，**Esc** 暂停。
-- 手机上可以用游戏里的触屏按键。
-
-## 实景场景验收
-
-地图覆盖约 0.56 平方公里。636 个测绘建筑编号中保留 530 栋，106 处低矮附属物及步道障碍记录在布局文件中。231 个临街开间按实测墙线布置。道路、标线、人行道、寺前步道和绿地共用一张三角网，外围地形在街区边界衔接。地图浏览时暂停车流和行人模拟。
-
-`npm run check:shiba` 从发布的 GLB 读取三角面，独立计算地基埋深、路缘与车道交集、屋顶覆盖、米制纹理、树木净空和街具位置。请使用装有 Pillow、NumPy 和 Shapely 2.1 或更高版本的 Python 环境，可通过 `SHIBA_PYTHON` 指定解释器。
-
-桌面 Chrome 的十组近景覆盖四座塔脚承台、山墙、增上寺、公园、古川高架、三处站口、边界道路、标线、信号机和树木。部分近景图包含同一地点的多个视角，每个画面都由游戏直接渲染。复拍命令为 `SHIBA_FIX=1 node checks/shiba-map-views.cjs 验收/电影级地图/专项修复`。 [近景验收与实测记录](验收/电影级地图/专项修复/) · [数据来源与重建方法](art/shiba/sources.md)
-
-## 修改项目
-
-| 文件 | 用途 |
-| --- | --- |
-| [src/](src/) | 任务与对话、城市、车辆和人物行为、界面 |
-| [assets/](assets/) | 游戏用的 GLB 模型、封面和可在 Blender 打开的工程 |
-| [art/shiba/](art/shiba/) | 芝公园测绘数据处理、植被提取和 Blender 建模脚本 |
-| [art/tokyo/build.py](art/tokyo/build.py) | 从 Blender 重建东京街区、游戏模型和碰撞数据 |
-| [art/build_street_studio.py](art/build_street_studio.py) | 生成街头车辆与人物的 Blender 脚本 |
-| [checks/](checks/) | 路口、人物路线和车辆停车点的场景检查 |
-
-实景地图可用 `npm run check:shiba` 核对边界、六处入口、塔尖高度和离线贴图。改动后重新运行 `npm run build`。修改街景或停车点时，可用 `npm run check:city` 验证。检查需要 Chrome 或 Chromium，非默认安装位置可用 `CHROME_BIN` 指定浏览器路径。
-
-提交时更新源码与相关模型文件。生成的 `index.html` 由本地构建产出。
-
-[街头车型录](棕榈海岸-街头车型录.webp) · [街头人物志](棕榈海岸-街头人物志.webp)
+游戏接入位于 `src/shiba/procedural/`，共用剧情和车辆动力学位于 `src/ledger-story.js`、`src/midnight.js` 和 `src/vehicle-motion.js`。街区渲染入口为 `vendor/procedural-tokyo/src/main.js`。如要编辑门楼，可使用 NumPy、Pillow 与 `art/procedural-shiba/prepare-gate.py`。`npm run pack:source` 在上一级目录导出可玩的游戏和构建源码。

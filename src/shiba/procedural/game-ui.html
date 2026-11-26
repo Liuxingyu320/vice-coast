@@ -1,0 +1,18 @@
+<main id="district-ui" aria-label="东京湾街区">
+  <div id="district-hud">
+    <button class="mission-chip" id="street-journal" aria-label="打开任务手记"><small id="story-series">海浪账本</small><strong id="story-task"></strong></button>
+    <div class="game-status"><span id="street-alert" aria-label="现场警戒" hidden></span><span id="game-time"></span><strong id="game-balance"></strong><button id="street-pause" aria-label="暂停游戏">Ⅱ</button></div>
+    <button class="game-radar" id="street-map" aria-label="打开街区地图"><span class="radar-face"><canvas width="260" height="172"></canvas><i>N</i></span><b>芝公园</b><small>港区　/　东京</small></button>
+    <div id="street-help">WASD 移动　·　拖动环视　·　Shift 奔跑</div>
+    <button id="street-action" hidden><kbd>E</kbd><span></span></button>
+    <span id="game-speed" hidden></span>
+    <div id="street-touch"><div class="move-pad"><button data-key="KeyW" aria-label="前进">▲</button><button data-key="KeyA" aria-label="向左">◀</button><button data-key="KeyS" aria-label="后退">▼</button><button data-key="KeyD" aria-label="向右">▶</button></div><div class="touch-tools"><button data-key="ShiftLeft">加速</button><button data-key="Space" id="touch-brake" hidden>手刹</button><button id="touch-garage">车库</button></div></div>
+  </div>
+  <div id="game-map-panel" hidden><div class="map-legend"><strong>芝公园</strong><span>▲ 里科　<span class="goal-color">◆ 任务</span>　<span class="car-color">■ 私家车</span></span><small id="map-objective-label"></small></div><i id="map-player" class="map-pin">▲</i><i id="map-objective" class="map-pin goal-color">◆</i><i id="map-vehicle" class="map-pin car-color" hidden>■</i></div>
+  <button id="back-to-character" hidden><kbd>M</kbd> 返回里科</button>
+  <section id="district-menu" role="dialog" aria-labelledby="district-menu-title" hidden>
+    <div class="game-menu-card"><small>东京湾街区</small><h2 id="district-menu-title"></h2><p id="district-menu-copy"></p><div id="district-menu-actions"></div></div>
+  </section>
+  <!--LEDGER_DIALOGUE-->
+  <output id="district-toast" aria-live="polite" hidden></output>
+</main>

@@ -17,34 +17,36 @@ const titles={new:'听玛拉的午夜计划',door:'问妮娜后台怎么走',bar
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const $=id=>document.getElementById(id);
 export class MidnightDistrict{
- constructor(chapter){
-  this.host=chapter;this.sim=chapter.sim;this.save=chapter.save;this.s=this.save.midnight;this.set=makeMidnightSet(this.sim);this.api=chapter.api;
+ constructor(chapter, locations=spots, set=null, copy={}){
+  this.copy=copy;
+  this.spots=locations;
+  this.host=chapter;this.sim=chapter.sim;this.save=chapter.save;this.s=this.save.midnight;this.set=set??makeMidnightSet(this.sim);this.api=chapter.api;
  }
  get honest(){return this.save.chapter.ending==='return'}
  get unlocked(){return !!this.save.chapter.ending}
- get target(){return this.unlocked?spots[this.s.stage]:null}
+ get target(){return this.unlocked?this.spots[this.s.stage]:null}
  get journal(){return this.s.outcome==='live'?'玛拉的现场原声正在 FM 98.4 播放。':this.s.outcome==='sponsor'?'雷蒙接手了午夜档。车库替你预留了免费薄荷涂装。':this.target?.label??'等海浪账本分账后，回唱片店见玛拉。'}
  get sideNote(){
   const s=this.s,lines=[];
   if(s.vinyl==='carrying')lines.push('露兹的唱片筐要送到唱片店门口。');
   else if(s.vinyl!=='idle')lines.push('露兹给你留了一张稀有首版。');
-  if(s.bag==='looking')lines.push('伊内丝把包落在码头以南的海蓝亭，留意临街的台阶。');
-  else if(s.bag==='found')lines.push('相机包可以还给海边的伊内丝，也可以带去火烈鸟后巷找帕兹。');
+  if(s.bag==='looking')lines.push(this.copy.bagNote??'伊内丝把包落在码头以南的海蓝亭，留意临街的台阶。');
+  else if(s.bag==='found')lines.push(this.copy.returnNote??'相机包可以还给海边的伊内丝，也可以带去火烈鸟后巷找帕兹。');
   else if(s.bag==='returned')lines.push('海边的公告栏挂上了伊内丝的新照片。');
   else if(s.bag==='sold')lines.push('伊内丝还在海滨等她的底片。');
   return lines.join(' ');
  }
  available(){
   const s=this.s,ids=[];
-  if(this.unlocked&&(this.save.chapter.active||s.stage==='new'&&this.api.free())&&spots[s.stage])ids.push(s.stage);
+  if(this.unlocked&&(this.save.chapter.active||s.stage==='new'&&this.api.free())&&this.spots[s.stage])ids.push(s.stage);
   if(s.vinyl==='idle')ids.push('stall');else if(s.vinyl==='carrying')ids.push('crate');
   if(s.bag==='idle')ids.push('photo');else if(s.bag==='looking')ids.push('bag');else if(s.bag==='found')ids.push('deliver','sell');
   return ids;
  }
- nearby(){return this.available().map(id=>({k:'mid-'+id,d:distance(this.sim.pos,spots[id])})).filter(o=>o.d<3.35).sort((a,b)=>a.d-b.d)}
+ nearby(){return this.available().map(id=>({k:'mid-'+id,d:distance(this.sim.pos,this.spots[id])})).filter(o=>o.d<3.35).sort((a,b)=>a.d-b.d)}
  hint(){
   if(this.sim.inCar)return '';
-  for(const id of this.available().filter(k=>['stall','photo','bag'].includes(k)))if(distance(this.sim.pos,spots[id])<13)return ({stall:'路旁传来吆喝声　·　旧唱片摊',photo:'有人在叫你　·　海滨摄影师',bag:'台阶边露出一截帆布背带'})[id];
+  for(const id of this.available().filter(k=>['stall','photo','bag'].includes(k)))if(distance(this.sim.pos,this.spots[id])<13)return ({stall:'路旁传来吆喝声　·　旧唱片摊',photo:'有人在叫你　·　海滨摄影师',bag:'台阶边露出一截帆布背带'})[id];
   return '';
  }
  say(who,line,buttons){this.host.say(who,line,buttons)}
@@ -54,7 +56,7 @@ export class MidnightDistrict{
  action(k){
   const s=this.s,save=this.save,leave=['稍后再来',()=>this.host.close()];
   switch(k){
-  case 'new':this.say('mara','半夜十二点，码头上那根旧天线还留着一格空档。雷蒙想买走它，循环播他的广告。我想让海岸先听完那晚停电后的掌声。',[
+  case 'new':this.say('mara',this.copy.newSignal??'半夜十二点，码头上那根旧天线还留着一格空档。雷蒙想买走它，循环播他的广告。我想让海岸先听完那晚停电后的掌声。',[
    ['把午夜档接回来',()=>{this.api.start();this.sim.setNight(true);this.next('door',this.honest?'维克递来一张首版。后院的乐手记得你。':'门房的名单上还有你的名字。先去听听妮娜怎么说。')}],leave]);break;
   case 'door':this.say('door',this.honest?'鼓手昨天收到了尾款。他说你来，就留正门。蒂托在吧台候着，别把首版忘了。':'你上次拿走了乐手的钱。正门的名单不变。装货班还缺人，班长只认做完的工。',[[this.honest?'从正门去吧台':'去后巷找搬运班长',()=>this.next(this.honest?'bar':'crew')],leave]);break;
   case 'bar':this.say('tito','我拿那笔尾款换了新鼓皮。想上电台？帮我把维克那张老唱片放一遍。最后一拍响时，磁卡就是你的。',[['把首版带到调音台',()=>this.next('needle')],leave]);break;
@@ -64,16 +66,16 @@ export class MidnightDistrict{
    if(save.money>=200)choices.push(['付 $200 请搬运班代送',()=>{if(save.money<200||s.stage!=='crew')return;save.money-=200;s.pass=true;this.next('card','帕兹叫同事接手搬运。装货门已开，你可以直接去后台取磁卡。')}]);
    this.say('paz','前门的客人名单不归我管。你可以替我搬一趟，我给你签班牌。赶时间就付两百，我让夜班替你把箱子搬进去。黄线在卷闸里头。',[...choices,leave]);break}
   case 'haul':this.say('paz','音箱到位。把箱扣朝外，夜班的人才摸得着。磁卡在舞台左后方的调音台。',[['卸下音箱，去取磁卡',()=>this.next('card')],leave]);break;
-  case 'card':this.say('frequencyCard','薄薄的磁条背面写着铅笔字。“98.4，灯阵六成。两只旋钮稳住，等我数完二拍半。”',[['装好磁卡，到码头接台',()=>this.next('dial','码头边停着一辆 Bay Wave 转播车，谁都可以开。')],leave]);break;
+  case 'card':this.say('frequencyCard','薄薄的磁条背面写着铅笔字。“98.4，灯阵六成。两只旋钮稳住，等我数完二拍半。”',[[this.copy.dialChoice??'装好磁卡，到码头接台',()=>this.next('dial',this.copy.dialDirections??'码头边停着一辆 Bay Wave 转播车，谁都可以开。')],leave]);break;
   case 'dial':this.startTuner();break;
   case 'offer':this.say('ramon','我出一千二买今晚的时段。播完广告，明天这台车就能换上新漆。你也可以给玛拉开麦。磁卡在你手里。',[
    ['推起玛拉的现场原声　＋$500',()=>this.finish('live')],['把午夜时段签给雷蒙　＋$1,200',()=>this.finish('sponsor')],leave]);break;
   case 'stall':{
-   const choices=[['替露兹把唱片搬进店里寄售',()=>{s.vinyl='carrying';this.commit('旧唱片筐已拿好。波音唱片在这条人行道北边。')}]];
+   const choices=[['替露兹把唱片搬进店里寄售',()=>{s.vinyl='carrying';this.commit(this.copy.crateDirections??'旧唱片筐已拿好。波音唱片在这条人行道北边。')}]];
    if(this.honest)choices.push(['用乐手联名担保摊位',()=>{s.vinyl='catalogued';this.commit('露兹把一张首版《Side B》套进了你的纸袋。')}]);
    this.say('luz','雨一来，这些头版就得泡在路上。维克愿意给我腾半格货架，可我得守摊。你能搭把手吗？',[...choices,leave]);break}
   case 'crate':this.say('vic','这张头版我当年找了半年。放心，露兹的名字我写第一行。跑腿的钱和她留给你的首版都在这。',[['把整筐唱片交给维克',()=>{s.vinyl='delivered';save.money+=180;this.commit('街头见闻 · 寄售完成　＋$180　／　稀有首版《Side B》')}],leave]);break;
-  case 'photo':this.say('ines','我绕着海蓝亭拍了一卷底片，现在肩上只剩一条带子。帆布包有黄铜扣。能帮我看看临街的台阶吗？',[['沿海边找找',()=>{s.bag='looking';this.commit('伊内丝指了指海滨南边卖明信片的亭子。')}],leave]);break;
+  case 'photo':this.say('ines',this.copy.lostCamera??'我绕着海蓝亭拍了一卷底片，现在肩上只剩一条带子。帆布包有黄铜扣。能帮我看看临街的台阶吗？',[[this.copy.searchChoice??'沿海边找找',()=>{s.bag='looking';this.commit(this.copy.searchDirections??'伊内丝指了指海滨南边卖明信片的亭子。')}],leave]);break;
   case 'bag':this.say('canvasBag','黄铜扣已经磨亮。包里只有旧镜头和一卷底片，吊牌上写着“伊内丝”。',[['收好相机包',()=>{s.bag='found';this.commit('可以把包还给伊内丝，也可以去后巷找收旧器材的帕兹。')}],leave]);break;
   case 'deliver':this.say('ines','你知道这卷里有什么吗？大家撑着雨棚收摊的背影。等天亮我就洗一张，挂在这里。',[['交还底片和镜头　＋$250',()=>{s.bag='returned';save.money+=250;this.commit('街头见闻 · 失物归还　／　海滨公告栏更新')}],leave]);break;
   case 'sell':this.say('paz','镜头我收，五百。底片不会再回到摄影师手里。你自己定。',[['转让镜头和底片　＋$500',()=>{s.bag='sold';save.money+=500;this.commit('街头见闻 · 已转让相机包　＋$500')}],leave]);break;

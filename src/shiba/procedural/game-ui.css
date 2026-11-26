@@ -1,0 +1,34 @@
+#district-ui {position:fixed;inset:0;z-index:8;pointer-events:none;color:#fff5e2;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;--amber:#ffd18b;--panel:rgba(20,19,25,.88);text-shadow:0 1px 3px #1611197a}
+#district-ui [hidden] {display:none!important}
+#district-ui button,#district-ui select,#district-ui input {pointer-events:auto;font:inherit;color:inherit}
+#district-ui button {cursor:pointer}
+#district-ui button:focus-visible,#district-ui select:focus-visible {outline:2px solid var(--amber);outline-offset:3px}
+body.district-map #district-hud {display:none}
+#district-ui kbd {font:650 11px/1 system-ui;background:#fff1d9;color:#262128;border-radius:3px;padding:4px 6px;text-shadow:none}
+.mission-chip {position:absolute;top:clamp(18px,3.8vh,45px);left:clamp(18px,3.7vw,62px);display:grid;gap:5px;text-align:left;border:0;border-left:3px solid var(--amber);padding:10px 21px 12px 15px;background:linear-gradient(90deg,var(--panel) 65%,#17151da9);max-width:min(49vw,395px);box-shadow:0 2px 14px #17141d2e}
+.mission-chip small,.game-menu-card>small,#speakerrole {font-weight:750;letter-spacing:.13em;color:var(--amber);font-size:12px}
+.mission-chip strong{font-weight:700;font-size:clamp(13px,1.22vw,18px);line-height:1.4}
+.game-status {position:absolute;top:clamp(18px,3.8vh,45px);right:clamp(18px,3.7vw,62px);display:flex;align-items:center;gap:13px;background:var(--panel);border-radius:3px;padding:5px 6px 5px 13px;font-size:14px;font-variant-numeric:tabular-nums}
+.game-status strong {color:#a8dfb2}.game-status button,.touch-tools button,.move-pad button {border:1px solid #fff4dd47;background:#26242c;border-radius:3px;padding:5px 9px}
+.game-radar {position:absolute;bottom:clamp(22px,4.5vh,55px);left:clamp(18px,3.7vw,62px);background:none;border:0;padding:0;text-align:left;text-shadow:1px 1px 5px #111,0 1px 2px black;display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:4px 10px}
+.radar-face {position:relative;grid-column:span 2;overflow:hidden;display:block;border:2px solid #eee5cebc;border-bottom:3px solid #99bd9c;border-radius:4px;box-shadow:0 3px 12px #1118}
+.radar-face canvas {display:block;width:clamp(130px,12vw,190px);height:auto}.radar-face i {position:absolute;top:2px;right:5px;font:bold 11px system-ui;color:white}.game-radar b{font-size:clamp(17px,1.7vw,26px);font-style:italic}.game-radar small{font-size:11px}
+#street-help,#game-speed {position:absolute;right:clamp(18px,3.7vw,62px);bottom:clamp(22px,4.5vh,55px);font-size:12px;background:var(--panel);padding:7px 11px;border-radius:3px}
+#game-speed {bottom:calc(clamp(22px,4.5vh,55px) + 40px);font:italic 900 28px/1 "Barlow Condensed",sans-serif;color:var(--amber)}
+#street-action,#back-to-character {background:var(--panel);color:#fff6e4;display:flex;align-items:center;gap:9px;padding:9px 15px;border:1px solid #f5d5aa8c;border-radius:4px;font-weight:700}
+#street-action {position:absolute;bottom:12%;left:50%;transform:translateX(-50%);white-space:nowrap}
+#back-to-character {position:absolute;left:20px;top:20px}
+#district-toast {position:absolute;left:50%;top:13%;transform:translateX(-50%);border-radius:4px;background:#201b23dd;padding:8px 14px;max-width:min(70vw,520px);font-size:13px;text-align:center}
+#district-menu,#conversation {position:absolute;inset:0;pointer-events:auto;background:#11101989;display:grid;align-items:center;justify-items:center}
+.game-menu-card,.dialogcopy {box-sizing:border-box;width:min(490px,90vw);padding:25px 27px;color:#fff4df;background:#211e26f5;border-top:3px solid #ffb584;box-shadow:0 12px 60px #170f19aa;max-height:88vh;overflow-y:auto}
+.game-menu-card h2,#speaker {margin:4px 0 6px;font-size:27px}.game-menu-card p,#spoken {font-size:15px;line-height:1.55;margin:8px 0 14px}
+#district-menu-actions,#answers {display:grid;gap:6px}#district-menu-actions button,#answers button,#walkAway,.game-menu-card select {padding:9px 12px;border:1px solid #c3b19f55;border-radius:3px;background:#37323c;text-align:left}#district-menu-actions button:hover,#answers button:hover {background:#49404b}
+#district-menu-actions button:first-of-type,#answers button:first-child {background:#ffcb95;color:#281e25;border-color:#ffce9d}
+#conversation {align-items:end;justify-items:end;background:linear-gradient(0deg,#19151d66,transparent 55%);padding:0 clamp(18px,4vw,65px) clamp(20px,4vh,50px);box-sizing:border-box}
+#walkAway {margin-top:9px;font-size:12px!important}.dialrow,.lockrow{margin:8px 0}.dialrow input{width:100%}#track{position:relative;width:100%;height:9px;background:#605064;margin:.7em 0}#track i{position:absolute;left:36%;width:42%;height:100%;background:#be975c}#track b{position:absolute;height:15px;width:3px;top:-3px;background:white}
+#street-touch {display:none} @media(pointer:coarse){#street-help{display:none}#street-touch{display:block}.move-pad,.touch-tools{position:absolute;bottom:max(17px,env(safe-area-inset-bottom));display:grid;gap:4px}.move-pad{left:15px;grid-template-columns:repeat(3,35px)}.move-pad button,.touch-tools button{touch-action:none;min-height:31px;background:#242129cc}.move-pad [data-key="KeyW"]{grid-column:2}.move-pad [data-key="KeyA"]{grid-column:1}.touch-tools{right:16px;grid-auto-flow:column}.game-radar{bottom:100px}.radar-face canvas{width:94px}.game-radar b{font-size:15px}.game-radar small{display:none}#street-action{bottom:24%;font-size:13px}#game-speed{bottom:65px}}
+@media(max-width:650px){.game-status{font-size:12px;gap:6px}.mission-chip{padding:7px 11px;max-width:51vw}.mission-chip small{font-size:10px}.dialogcopy,.game-menu-card{padding:16px 18px}.mission-chip strong{font-size:12px}#conversation{justify-items:center;padding:0 0 14px}#district-toast{top:18%}}
+
+.map-legend{position:absolute;bottom:4vh;left:4vw;display:grid;gap:6px;padding:14px 19px;background:var(--panel);border-left:3px solid var(--amber);font-size:13px}.map-legend strong{font-size:22px}.map-legend small{max-width:75vw}.map-pin{position:absolute;transform:translate(-50%,-50%);font:900 24px system-ui;color:white;text-shadow:0 1px 4px #18171a,0 0 2px black}.goal-color{color:#ffd079}.car-color{color:#a7e8d5}
+
+#street-alert {color:#ffc672;letter-spacing:2px}

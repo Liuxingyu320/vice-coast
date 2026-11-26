@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {studioModel,rigSlots} from './blender-assets.js';
+import {studioModel,rigSlots} from './studio-models.js';
 import {residents} from './street-catalog.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -150,6 +150,15 @@ export function makePerson(role='civilian',seed=0){
  }
  const far=attach(root,g.far,0,0,0);far.visible=false;root.userData={legs,knees,arms,elbows,head,torso,far};if(role==='vic')root.scale.setScalar(1.035);if(role==='mara')root.scale.setScalar(.975);
  return root;
+}
+export function seatedPerson(role='rico'){
+ const person=makePerson(role),rig=person.userData;
+ person.scale.multiplyScalar(.90);
+ for(const leg of rig.legs)leg.rotation.x=1.27;
+ for(const knee of rig.knees)knee.rotation.x=-1.37;
+ for(const arm of rig.arms)arm.rotation.x=.72;
+ for(const elbow of rig.elbows)elbow.rotation.x=.60;
+ return person;
 }
 export function personDetail(o,near){
  const {torso,legs,far}=o.userData;if(torso.visible===near)return;

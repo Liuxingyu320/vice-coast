@@ -13,7 +13,7 @@ function edges(ring, visit) {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) if (visit(ring[j], ring[i])) return true;
   return false;
 }
-function nearestEdge(rings, x, y) {
+export function nearestEdge(rings, x, y) {
   let best = Infinity,
     tangent = [0, 0];
   for (const ring of rings)
@@ -79,11 +79,28 @@ function indexed(polygons) {
     return null;
   };
 }
-export function createCollision(coreBoundary, { solids, wells, walks, travelBoundary, aprons }) {
+export function vehicleHull(x, y, angle) {
+  const cs = Math.cos(angle),
+    sn = Math.sin(angle);
+  // Chamfered corners follow the bumper and include the width between sample points.
+  return [
+    [-0.72, 2.09],
+    [0.72, 2.09],
+    [0.91, 1.68],
+    [0.91, -1.58],
+    [0.73, -2.02],
+    [-0.73, -2.02],
+    [-0.91, -1.58],
+    [-0.91, 1.68],
+  ].map(([u, v]) => [x + u * cs + v * sn, y - u * sn + v * cs]);
+}
+
+export function createCollision(coreBoundary, { solids, wells, walks, travelBoundary, travelHoles = [], aprons, stoneEdges, stoneEdgeLift = 0 }) {
   const boundary = travelBoundary || coreBoundary;
   const world = indexed(solids),
     stairs = indexed(wells),
     raised = indexed(walks);
+  const garden = stoneEdges?.length ? indexed(stoneEdges) : null;
   const ramps = [];
   if (aprons) {
     const vertices = aprons.tenthsMm.map((h, i) => [
@@ -99,7 +116,9 @@ export function createCollision(coreBoundary, { solids, wells, walks, travelBoun
   }
   const ramp = indexed(ramps);
   function sidewalkLift(x, y) {
-    if (raised(x, y, x, y, (r) => inSolid(x, y, r))) return 0.14;
+    const sidewalk = raised(x, y, x, y, (r) => inSolid(x, y, r));
+    if (sidewalk && !aprons?.replacesWalk) return 0.14;
+    if (garden?.(x, y, x, y, (r) => inSolid(x, y, r))) return stoneEdgeLift;
     return (
       ramp(x, y, x, y, ([[a, b, c]]) => {
         const det = cross(a, b, c);
@@ -110,12 +129,13 @@ export function createCollision(coreBoundary, { solids, wells, walks, travelBoun
         return u >= -1e-8 && v >= -1e-8 && u + v <= 1.00000001
           ? a[2] + u * (b[2] - a[2]) + v * (c[2] - a[2])
           : 0;
-      }) || 0
+      }) || (sidewalk ? 0.14 : 0)
     );
   }
   // Bucket boundary edges by northing. Several real streets follow the 3,000-edge survey cut.
   const rows = new Map();
-  edges(boundary, ([ax, ay], [bx, by]) => {
+  const travelRings = [boundary, ...travelHoles];
+  for (const ring of travelRings) edges(ring, ([ax, ay], [bx, by]) => {
     for (let k = Math.floor(Math.min(ay, by) / 12); k <= Math.floor(Math.max(ay, by) / 12); k++) {
       if (!rows.has(k)) rows.set(k, []);
       rows.get(k).push([ax, ay, bx, by]);
@@ -132,20 +152,8 @@ export function createCollision(coreBoundary, { solids, wells, walks, travelBoun
     return inBoundary(x, y) && !hitPoint(x, y);
   }
   function contact(x, y, angle) {
-    const cs = Math.cos(angle),
-      sn = Math.sin(angle);
-    // Chamfered corners follow the bumper and include the width between sample points.
-    const hull = [
-      [-0.72, 2.09],
-      [0.72, 2.09],
-      [0.91, 1.68],
-      [0.91, -1.58],
-      [0.73, -2.02],
-      [-0.73, -2.02],
-      [-0.91, -1.58],
-      [-0.91, 1.68],
-    ].map(([u, v]) => [x + u * cs + v * sn, y - u * sn + v * cs]);
-    for (const [u, v] of hull) if (!inBoundary(u, v)) return nearestEdge([boundary], u, v);
+    const hull = vehicleHull(x,y,angle);
+    for (const [u, v] of hull) if (!inBoundary(u, v)) return nearestEdge(travelRings, u, v);
     const inspect = (rings) => {
       for (const [u, v] of hull) if (inSolid(u, v, rings)) return nearestEdge(rings, u, v);
       for (const ring of rings)

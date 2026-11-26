@@ -1,3 +1,5 @@
+import {registerStudioAssets} from './studio-models.js';
+export {studioModel,rigSlots} from './studio-models.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import marlin from '../assets/marlin-turbo.glb';
 import solano from '../assets/solano-gt.glb';
@@ -11,7 +13,7 @@ import streetResidents from '../assets/street-residents.glb';
 import tokyoBay from '../assets/tokyo-bay.glb';
 
 const files={tokyoBay,marlin,solano,van,rico,mara,ramon};
-let models,loading;
+let loading;
 export function loadStudio(){
  if(!loading){
   const loader=new GLTFLoader();
@@ -22,13 +24,7 @@ export function loadStudio(){
    const {scene}=await loader.parseAsync(bytes.buffer,'');
    return scene.children.map(asset=>[asset.userData.assetKey,asset]);
   });
-  loading=Promise.all([...original,...groups]).then(lists=>{models=Object.fromEntries(lists.flat())}).catch(error=>{loading=null;throw error});
+  loading=Promise.all([...original,...groups]).then(lists=>{registerStudioAssets(lists.flat())}).catch(error=>{loading=null;throw error});
  }
  return loading;
-}
-export const studioModel=name=>models[name].clone(true);
-export function rigSlots(model){
- const slots={};
- model.traverse(node=>{if(node.userData.rigSlot)slots[node.userData.rigSlot]=node});
- return slots;
 }
