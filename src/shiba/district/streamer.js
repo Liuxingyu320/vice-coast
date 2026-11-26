@@ -38,7 +38,7 @@ export class DistrictTiles {
     const pending=[];
     for(const tile of this.items){
       const d=Math.hypot(Math.max(0,Math.abs(tile.x-x)-tile.half),Math.max(0,Math.abs(tile.z-z)-tile.half));
-      const range=tile.kind==='detail'?Math.min(980,Math.max(220,this.radius)):2500;
+      const range=tile.kind==='detail'?Math.min(980,Math.max(220,this.radius)):(this.overview?6500:2500);
       const mesh=this.active.get(tile.id);
       if(d>range+(mesh?100:0)){
         if(mesh){
@@ -47,7 +47,7 @@ export class DistrictTiles {
         }
         continue;
       }
-      if(mesh||tile.kind==='blocks'&&this.hasBuildings(tile.address))continue;
+      if(mesh||tile.kind==='blocks'&&!tile.persistent&&this.hasBuildings(tile.address))continue;
       pending.push({tile,priority:d+(tile.kind==='ground'?-340:tile.kind==='blocks'?190:0)});
     }
     this.jobs=pending.sort((a,b)=>b.priority-a.priority);
@@ -58,13 +58,16 @@ export class DistrictTiles {
   }
   syncOutline(address){
     const block=this.active.get('blocks/'+address);
-    if(block)block.visible=!this.hasBuildings(address);
+    if(block){
+      const fine=this.hasBuildings(address);
+      for(const mesh of block.children)mesh.visible=mesh.name!=='skyline-replaced'||!fine;
+    }
   }
   work(budget=4){
     const start=performance.now();
     while(this.jobs.length&&performance.now()-start<budget){
       const {tile}=this.jobs.pop();
-      if(tile.kind==='blocks'&&this.hasBuildings(tile.address))continue;
+      if(tile.kind==='blocks'&&!tile.persistent&&this.hasBuildings(tile.address))continue;
       const group=loadGroup(tile.id,this.materialFor);
       this.scene.add(group);this.active.set(tile.id,group);this.syncOutline(tile.address);
     }
@@ -72,7 +75,7 @@ export class DistrictTiles {
 }
 
 // Keep the measured height, crown width and orientation at both levels. Instance each species and sector once.
-export function plantTrees(scene,rows,materialFor){
+export function plantTrees(scene,rows,materialFor,coreCount=rows.length){
   const prototypes=Array.from({length:3},(_,kind)=>loadGroup('trees/'+kind,materialFor));
   const bins=new Map(),dummy=new T.Object3D(),coarse=new T.SphereGeometry(1,12,8);
   const points=coarse.attributes.position;
@@ -85,8 +88,9 @@ export function plantTrees(scene,rows,materialFor){
   const trunk=new T.CylinderGeometry(.58,1,1,6),bark=new T.MeshLambertMaterial({color:0x574c40});
   const leaves=[0x53734a,0x44664a,0x67794b].map(color=>new T.MeshLambertMaterial({color}));
   rows.forEach(([x,north,elevation,height,radius],i)=>{
-    const z=-north,kind=i%11<6?0:i%11<9?1:2,key=Math.floor(x/90)+','+Math.floor(z/90)+','+kind;
-    if(!bins.has(key))bins.set(key,{kind,cx:(Math.floor(x/90)+.5)*90,cz:(Math.floor(z/90)+.5)*90,rows:[]});
+    const z=-north,kind=i%11<6?0:i%11<9?1:2,side=i<coreCount?90:220;
+    const key=side+','+Math.floor(x/side)+','+Math.floor(z/side)+','+kind;
+    if(!bins.has(key))bins.set(key,{kind,cx:(Math.floor(x/side)+.5)*side,cz:(Math.floor(z/side)+.5)*side,half:side/2,rows:[]});
     bins.get(key).rows.push({x,z,elevation,height,radius,yaw:i*2.399963});
   });
   for(const group of bins.values()){
@@ -114,7 +118,7 @@ export function plantTrees(scene,rows,materialFor){
   }
   return (x,z,map)=>{
     for(const g of bins.values()){
-      const d=Math.hypot(g.cx-x,g.cz-z);g.near.visible=!map&&d<112;
+      const d=Math.hypot(Math.max(0,Math.abs(g.cx-x)-g.half),Math.max(0,Math.abs(g.cz-z)-g.half));g.near.visible=!map&&d<112;
       g.far.visible=!g.near.visible&&d<1600;
     }
   };

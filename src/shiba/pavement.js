@@ -100,10 +100,12 @@ export function finishPavement(district, data, evening) {
             '#include <map_fragment>',
             `#include <map_fragment>
         vec2 mapEN=(siteEN-landFrame.xy)/landFrame.zw;vec3 land=texture2D(landCover,mapEN).rgb;
-        vec3 pool=texture2D(streetPools,mapEN).rgb;
+        float surveyMix=smoothstep(0.,.014,min(min(mapEN.x,mapEN.y),min(1.-mapEN.x,1.-mapEN.y)));
+        land=mix(vec3(1.,0.,0.),land,surveyMix);
+        vec3 pool=texture2D(streetPools,mapEN).rgb*surveyMix;
         ${
           asphalt
-            ? `vec3 wear=texture2D(roadWear,mapEN).rgb;
+            ? `vec3 wear=mix(vec3(.06,.5,.12),texture2D(roadWear,mapEN).rgb,surveyMix);
           float chips=texture2D(map,siteEN*.91+vec2(.17,-.23)).g;
           diffuseColor.rgb*=1.12+.35*(wear.g-.5)-.13*wear.r;
           diffuseColor.rgb+=vec3(.013,.015,.018)*(.57+7.*chips);`
@@ -118,7 +120,7 @@ export function finishPavement(district, data, evening) {
           vec3 fabric=mix(mix(grainMap(2.,siteEN/1.48),grainMap(1.,siteEN/1.96),dirt),grainMap(0.,siteEN/1.65),grass);
           float distanceToViewer=length(siteEN-vec2(cameraPosition.x,-cameraPosition.z));
           float strength=.94*(1.-smoothstep(30.,220.,distanceToViewer));
-          ${o.name === 'skyline-ground' ? 'ortho=mix(vec3(dot(ortho,vec3(.22,.69,.09))),ortho,.38); strength=max(strength,.38*(1.-smoothstep(200.,680.,distanceToViewer)));' : ''}
+          ${o.name === 'skyline-ground' ? 'strength*=mix(.48,1.,surveyMix);' : ''}
           diffuseColor.rgb=mix(ortho,fabric*(.75+.55*smoothstep(.015,.45,dot(ortho,vec3(.21,.72,.07)))),strength);`
             : ''
         }

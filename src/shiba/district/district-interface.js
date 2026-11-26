@@ -4,6 +4,8 @@ const button=(label,handler)=>{const b=document.createElement('button');b.type='
 const arrows={ArrowUp:'KeyW',ArrowLeft:'KeyA',ArrowDown:'KeyS',ArrowRight:'KeyD',ShiftRight:'ShiftLeft'};
 const movement=new Set(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','Space']);
 
+import {neighborhoodAt} from './neighborhoods.js';
+
 export class DistrictInterface {
   constructor(game){
     this.game=game;this.panel=null;this.toastTimer=0;
@@ -115,6 +117,7 @@ export class DistrictInterface {
     $('beats').textContent=hits+' / 3　'+(line??'按下推子');
   }
   refresh(){
+    $('street-map').querySelector('b').textContent=neighborhoodAt(this.game.places,this.game.pos);
     const g=this.game,s=g.story;if(!s)return;
     const near=s.nearby(),car=g.car,dist=car?Math.hypot(g.pos.x-car.position.x,g.pos.z-car.position.z):Infinity;
     let label=near?s.prompt(near):'',key='E';

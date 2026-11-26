@@ -1,28 +1,41 @@
 export function createRadar(canvas,bounds,edges,land,boundary) {
-  const scale=.8, base=document.createElement('canvas');
+  const scale=Math.min(.8,2048/Math.max(bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ)), base=document.createElement('canvas');
   base.width=Math.ceil((bounds.maxX-bounds.minX)*scale);
   base.height=Math.ceil((bounds.maxZ-bounds.minZ)*scale);
   const g=base.getContext('2d');
   g.setTransform(scale,0,0,scale,-bounds.minX*scale,-bounds.minZ*scale);
-  g.fillStyle='#2b3136';g.fillRect(bounds.minX,bounds.minZ,base.width/scale,base.height/scale);
+  g.fillStyle='#303b40';g.fillRect(bounds.minX,bounds.minZ,base.width/scale,base.height/scale);
   for(const {kind,rings} of land) {
-    g.fillStyle={water:'#315766',park:'#405746',parking:'#42464b',building:'#555957'}[kind];g.beginPath();
+    g.fillStyle={water:'#294d5b',park:'#405a4e',parking:'#465153',building:'#525e60'}[kind];g.beginPath();
     for(const ring of rings){ring.forEach(([x,y],i)=>i?g.lineTo(x,-y):g.moveTo(x,-y));g.closePath();}
     g.fill('evenodd');
   }
-  for(const r of edges){
-    if(r.tunnel)continue;
-    g.lineWidth=r.lanes>1?3.7:1.8;g.strokeStyle=r.flyover?'#a3a9ac':r.lanes>1?'#87908d':'#697172';g.beginPath();
-    for(let i=0;i<r.pts.length;i+=3){if(i)g.lineTo(r.pts[i],r.pts[i+2]);else g.moveTo(r.pts[i],r.pts[i+2]);}
-    g.stroke();
+  const isArterial=r=>['primary','trunk','secondary','primary_link','trunk_link'].includes(r.category);
+  const groups=[edges.filter(r=>!r.lanes),edges.filter(r=>r.lanes&&!isArterial(r)),edges.filter(isArterial)];
+  g.lineCap=g.lineJoin='round';
+  for(const [i,group] of groups.entries()){
+    const widths=new Map();
+    for(const road of group){
+      const w=i===0?1.65:i===1?Math.min(8,Math.max(3.5,road.width)):Math.min(20,Math.max(9,road.width));
+      const width=Math.round(w*2)/2;
+      if(!widths.has(width))widths.set(width,new Path2D());
+      const path=widths.get(width),pts=road.pts;
+      path.moveTo(pts[0],pts[2]);for(let j=3;j<pts.length;j+=3)path.lineTo(pts[j],pts[j+2]);
+    }
+    for(const [width,path] of widths){
+      if(i){g.strokeStyle='#303b3f';g.lineWidth=width+2;g.stroke(path);}
+    }
+    for(const [width,path] of widths){
+      g.strokeStyle=['#798d85','#9ba8a5','#dbd9c5'][i];g.lineWidth=width;g.stroke(path);
+    }
   }
   const border=new Path2D(),outside=new Path2D();
   for(const ring of boundary){ring.forEach(([x,y],i)=>i?border.lineTo(x,-y):border.moveTo(x,-y));border.closePath();}
   outside.rect(bounds.minX-1,bounds.minZ-1,base.width/scale+2,base.height/scale+2);outside.addPath(border);
-  g.fillStyle='rgba(10,16,21,.68)';g.fill(outside,'evenodd');
+  g.fillStyle='#233e4b';g.fill(outside,'evenodd');
   g.strokeStyle='#cbb588';g.lineWidth=1.6;g.setLineDash([5,4]);g.stroke(border);
   const ctx=canvas.getContext('2d'), w=canvas.width,h=canvas.height;
-  return function draw(pos,goal,car) {
+  function draw(pos,goal,car) {
     const zoom=1.55, spanX=w/zoom,spanZ=h/zoom;
     ctx.fillStyle='#2b3136';ctx.fillRect(0,0,w,h);
     ctx.drawImage(base,(pos.x-spanX/2-bounds.minX)*scale,(pos.z-spanZ/2-bounds.minZ)*scale,
@@ -34,5 +47,6 @@ export function createRadar(canvas,bounds,edges,land,boundary) {
     ctx.save();ctx.translate(w/2,h/2);ctx.rotate(-pos.a);
     ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(7,7);ctx.lineTo(0,4);ctx.lineTo(-7,7);ctx.closePath();
     ctx.fillStyle='#fff3dc';ctx.strokeStyle='#102021';ctx.lineWidth=2;ctx.fill();ctx.stroke();ctx.restore();
-  };
+  }
+  return {draw,base};
 }

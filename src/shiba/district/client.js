@@ -44,7 +44,7 @@ export async function enterDistrict(){
   const {dome,u}=createSky(scene);scene.fog=new T.FogExp2(0xcbd5d7,.00049);
   const evening={value:0},clockTime={hour:15.3,label(){return String(Math.floor(this.hour)).padStart(2,'0')+'∶'+String(Math.round(this.hour%1*60)).padStart(2,'0');}};
   const materialFor=await loadMaterials(manifest,layout,evening,f=>setLoading(.09+f*.32,'铺设街面与建筑立面'));
-  const streamer=new DistrictTiles(scene,manifest,materialFor),trees=plantTrees(scene,layout.trees,materialFor);
+  const streamer=new DistrictTiles(scene,manifest,materialFor),trees=plantTrees(scene,layout.trees,materialFor,layout.coreTreeCount);
   const app={scene,camera,renderer,controls,clockTime,streamer,manifest,layout,physical,steps,decks};
   setLoading(.46,'布置芝公园');await nextFrame();
   const game=app.game=await createDistrictGame(app,new URLSearchParams(location.search));
