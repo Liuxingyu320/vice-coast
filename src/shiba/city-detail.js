@@ -585,14 +585,14 @@ export function buildCityDetail(ctx) {
       3,
     ),
   );
-  const signs = new T.MeshStandardMaterial({ map: chart, roughness: 0.68 });
+  const signs = new T.MeshStandardMaterial({ map: chart, roughness: 0.78, polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1 });
   signs.onBeforeCompile = (sh) => {
     sh.uniforms.detailEvening = evening;
     sh.vertexShader =
       'attribute vec3 detailCell;varying float markLight;\n' +
       sh.vertexShader.replace(
         '#include <uv_vertex>',
-        '#include <uv_vertex>\nvMapUv=(detailCell.xy+.004+uv*.992)/vec2(3.,4.);markLight=detailCell.z;',
+        '#include <uv_vertex>\nvMapUv=(detailCell.xy+vec2(.008,.012)+uv*vec2(.984,.976))/vec2(3.,4.);markLight=detailCell.z;',
       );
     sh.fragmentShader =
       'varying float markLight;uniform float detailEvening;\n' +

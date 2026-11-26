@@ -1,6 +1,6 @@
 import {makePerson,animatePerson} from './people.js';
 import * as T from 'three';
-import {studioModel,rigSlots} from './blender-assets.js';
+import {studioModel,rigSlots} from './studio-models.js';
 import {vehicles} from './street-catalog.js';
 
 export function canvasTexture(w,h,draw){

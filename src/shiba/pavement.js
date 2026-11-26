@@ -62,8 +62,12 @@ export function finishPavement(district, data, evening) {
       m.emissive.setRGB(0.018, 0.021, 0.027);
       m.emissiveIntensity = 0.55;
     } else if (paint) {
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = -0.6;
+      m.polygonOffsetUnits = -1;
+      m.color.multiplyScalar(0.92);
       m.emissive.copy(m.color);
-      m.emissiveIntensity = 0.18;
+      m.emissiveIntensity = 0.12;
       m.roughness = 0.78;
     } else if (paved && m.map) {
       m.bumpMap = m.map;

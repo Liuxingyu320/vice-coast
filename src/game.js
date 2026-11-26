@@ -1,4 +1,4 @@
-import {visitShiba} from './shiba.js';
+import {panoramaURL} from './shiba/district/route.js';
 import {StreetRadio} from './street-radio.js';
 import {loadStudio} from './blender-assets.js';
 import {LedgerChapter} from './chapter.js';
@@ -93,12 +93,6 @@ function refreshMenu(){
  $('edition').innerHTML=next?'<i></i>CHAPTER 02 <em>/</em> 午夜暗频':'<i></i>CHAPTER 01 <em>/</em> 海浪账本';
  if(next){$('story').querySelector('span').textContent=save.midnight.outcome?'回到午夜街区':save.midnight.stage==='new'?'进入午夜暗频':'继续午夜暗频';$('tagline').textContent=demo?'独立试玩 · '+(sample==='return'?'乐手记得你归还的尾款。':'门房还记得你留下的现金。'):save.midnight.outcome?'午夜过后，街上的电台还在播放你的选择。':'午夜的一个空频段，两个人都想让全城听见。'}
  if(replay){$('story').querySelector('span').textContent='开始后院回放';$('tagline').textContent='重演火烈鸟之夜。回放使用独立进度。'}
- if(!replay&&!demo){
-  $('firstArt').hidden=false;$('secondArt').hidden=true;
-  $('edition').innerHTML='<i></i>東京都 <em>/</em> 港区';
-  $('tagline').textContent='从芝公园到东京塔，沿增上寺门前的街道走到大门。';
-  $('story').querySelector('span').textContent='东京湾 · 原作剧情';
- }
  document.querySelectorAll('.sound').forEach(b=>{b.innerHTML=icon(save.sound?'audio':'off');b.setAttribute('aria-label',save.sound?'关闭声音':'打开声音');b.setAttribute('aria-pressed',String(save.sound))});
 }
 let photoYaw=-.75,photoHeight=2.6,photoRadius=6.3,dragPoint=null;
@@ -133,14 +127,8 @@ async function enter(story){
  chapter.update(0);
  updateHUD();sim.update(0,keys,target());sim.render();$('worldview').classList.remove('arrival');requestAnimationFrame(()=>$('worldview').classList.add('arrival'));
 }
-async function enterShiba(){
- if(opening)return;
- opening=true;screen='shiba-loading';$('loading').hidden=false;
- try{
-  await visitShiba(()=>{screen='menu';$('menu').hidden=false;$('roam').focus()});
-  screen='shiba';$('menu').hidden=true;
- }catch(err){console.warn('Shiba scene:',err.message);screen='menu';showPanel('error')}
- finally{opening=false;$('loading').hidden=true}
+function enterShiba(){
+ if(!opening) location.assign(panoramaURL(location.href));
 }
 function backMenu(){streetRadio?.stop(false);if(demo){const u=new URL(location.href);u.searchParams.delete('sample');location.assign(u.href);return}if(replay){replayLocation(false);return}chapter?.close();drift.reset();closePanel();stopRace();rewardUntil=0;screen='menu';persist();$('worldview').hidden=true;$('menu').hidden=false;refreshMenu();audio.update(false,save,0,false,false);$('story').focus()}
 function finishStep(dt){
@@ -212,7 +200,8 @@ function showPanel(name){
  }else if(name==='chapters'){
   body.innerHTML='<div class="chaptercard"><small>CHAPTER 01</small><h3>海浪账本</h3><p>从后院现场开始，重选取回母带的方法。</p>'+btn('sample-yard','重演火烈鸟之夜')+'</div><div class="chaptercard midnightcard"><small>CHAPTER 02　/　98.4 FM</small><h3>午夜暗频</h3><p>从唱片店出发，选择第一章分账后的街区关系。试玩使用独立进度。</p><div class="actions">'+btn('sample-return','上回把尾款还给了乐手')+btn('sample-keep','上回和玛拉留下了现金')+'</div></div>';
  }else if(name==='help'){
-  body.innerHTML='<div class="helpgrid">'+[['W / ↑','油门或步行前进'],['S / ↓','刹车、倒车或后退'],['A D / ← →','转向'],['空格','手刹漂移'],['Shift','氮气加速 / 奔跑'],['E','与附近人物交谈 / 查看物件'],['F','停车后下车 / 就近上车'],['M / J / G','地图 / 调度 / 车库'],['C / R','切换镜头 / 电台'],['B','转播车停稳后，开播或收天线'],['V','明信片相机'],['Esc / P','暂停或恢复']].map(([k,s])=>'<p><kbd>'+k+'</kbd>'+s+'</p>').join('')+'</div><p class="helpnote">金色菱形指向当前剧情目标。对话中可用数字键选择回答。触屏使用两侧驾驶键，点击小地图或任务文字可展开详情。</p>';
+  const mapHelp=screen==='menu'?'<h3>东京塔与芝公园全景</h3><p class="panelcopy">左键拖动平移，右键拖动旋转，滚轮缩放。WASD 移动镜头，N 切换昼夜。选择步行后可在街上移动，F 上下车，V 返回全景。</p><h3>东京湾原作</h3>':'';
+  body.innerHTML=mapHelp+'<div class="helpgrid">'+[['W / ↑','油门或步行前进'],['S / ↓','刹车、倒车或后退'],['A D / ← →','转向'],['空格','手刹漂移'],['Shift','氮气加速 / 奔跑'],['E','与附近人物交谈 / 查看物件'],['F','停车后下车 / 就近上车'],['M / J / G','地图 / 调度 / 车库'],['C / R','切换镜头 / 电台'],['B','转播车停稳后，开播或收天线'],['V','明信片相机'],['Esc / P','暂停或恢复']].map(([k,s])=>'<p><kbd>'+k+'</kbd>'+s+'</p>').join('')+'</div><p class="helpnote">金色菱形指向当前剧情目标。对话中可用数字键选择回答。触屏使用两侧驾驶键，点击小地图或任务文字可展开详情。</p>';
  }else if(name==='pause'){
   body.innerHTML='<div class="ledger"><span>钱包 '+money(save.money)+'</span><span>载客 '+save.trips+' 单</span><span>完赛 '+Object.values(save.records).reduce((n,r)=>n+r.runs,0)+' 场</span></div><div class="menulist">'+[['resume','继续游玩'],['map','城市地图'],['jobs','城市手记'],['garage','私人车库'],['drift','漂移练习'],['night',save.night?'切换至日落':'切换至午夜'],['photo','拍摄明信片'],['view','切换驾驶视角'],['help','操作指南'],['sound',save.sound?'关闭声音':'打开声音'],['rescue','道路救援'],['menu',replay?'结束回放，返回正式存档':'返回主菜单']].map(([k,s])=>'<button data-act="'+k+'">'+s+icon('arrow')+'</button>').join('')+'</div>';
  }else if(name==='map'){
@@ -306,7 +295,6 @@ $('shutter').onclick=()=>{redrawPhoto();const original=$('scene'),post=document.
 const mapped={ArrowUp:'KeyW',ArrowDown:'KeyS',ArrowLeft:'KeyA',ArrowRight:'KeyD',ShiftRight:'ShiftLeft'};
 function keyCode(e){return mapped[e.code]||e.code}
 window.addEventListener('keydown',e=>{
- if(screen==='shiba'||screen==='shiba-loading')return;
  if(e.metaKey||e.ctrlKey||e.altKey)return;
  if(!panel&&screen==='play'&&streetRadio?.mode==='setup'&&['SELECT','INPUT'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','Space'].includes(e.code))return;
  if(chapter?.talk&&!panel){
@@ -320,7 +308,7 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Tab'){const list=[...$('overlay').querySelectorAll('button:not(:disabled)')];if(e.shiftKey&&document.activeElement===list[0]){e.preventDefault();list.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===list.at(-1)){e.preventDefault();list[0].focus()}}
   if(['Escape','KeyP'].includes(e.code)||(panel==='map'&&e.code==='KeyM')||(panel==='jobs'&&e.code==='KeyJ')){e.preventDefault();if(!e.repeat)closePanel()}return
  }
- if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();if(replay||demo)enter(true);else enterShiba()}return}
+ if(screen==='menu'){if(e.code==='Enter'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();enter(true)}return}
  const k=keyCode(e);if(['Space','KeyW','KeyA','KeyS','KeyD','ShiftLeft'].includes(k)){e.preventDefault();keys.add(k);return}
  if(e.repeat)return;
  switch(k){case 'KeyB':streetRadio.toggle();break;case 'KeyE':if(chapter.nearby())chapter.action();else if(!sim.inCar&&sim.nearCar())interact();break;case 'KeyG':showPanel('garage');break;case 'KeyV':openPhoto();break;case 'KeyF':interact();break;case 'KeyM':showPanel('map');break;case 'KeyJ':$('missionbtn').click();break;case 'KeyR':toggleRadio();break;case 'KeyC':changeView();break;case 'KeyP':case 'Escape':e.preventDefault();showPanel('pause');break}

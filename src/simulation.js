@@ -1,4 +1,5 @@
-import {makePerson,personDetail} from './people.js';
+import {advanceDrive} from './vehicle-motion.js';
+import {makePerson,personDetail,seatedPerson} from './people.js';
 import {vehicles,additions,streetResidents} from './street-catalog.js';
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -215,20 +216,8 @@ export class Simulation{
  get carSpec(){return vehicles[this.car.userData.model]}
  rescue(){const p=this.pos;const x=xs.reduce((a,b)=>Math.abs(a-p.x)<Math.abs(b-p.x)?a:b);Object.assign(p,{x:x+4.2,z:clamp(p.z,-232,232),a:0});this.speed=0;this.motionA=0;this.inCar=true;this.hero.visible=false;this.syncCar();this.resetCamera();this.notify('救援完成 · 车辆已回到车道')}
  driving(dt,keys){
-  const p=this.pos,forward=keys.has('KeyW'),reverse=keys.has('KeyS'),steer=Number(keys.has('KeyA'))-Number(keys.has('KeyD'));
-  const {engine,brakes,nitro}=this.carId===0?this.save.mods:{engine:0,brakes:0,nitro:0};
-  const hand=keys.has('Space'),boost=keys.has('ShiftLeft')&&forward&&this.boost>.015&&!this.emptyBoost;
-  if(!keys.has('ShiftLeft')||this.boost>.32)this.emptyBoost=false;
-  this.boost=clamp(this.boost+(boost?-.30/(1+.35*nitro):.105)*dt,0,1);if(this.boost<.015)this.emptyBoost=true;
-  const oldSpeed=this.speed;const sand=p.x>179,drag=(sand?.63:.16)*this.speed;
-  if(forward)this.speed+=(this.speed< -1?23:(boost?20.5:12.8)*(this.carSpec.power??1))*(1+.13*engine)*dt;
-  if(reverse)this.speed-=(this.speed>1?25*(1+.18*brakes):7.0)*dt;
-  this.speed-=drag*dt;const braking=(hand?13:!forward&&!reverse?2.1:.23)*dt;
-  this.speed-=Math.sign(this.speed)*Math.min(Math.abs(this.speed),braking);
-  this.speed=clamp(this.speed,-8,sand?17:boost?48+3*engine:Math.max(34+3*engine,oldSpeed-dt*6));
-  this.smoothSteer+=(steer-this.smoothSteer)*(1-Math.exp(-dt*7));
-  p.a+=this.smoothSteer*Math.sign(this.speed)*Math.min(Math.abs(this.speed)*.26,hand?2.35:1.42)*(this.carSpec.steering??1)*dt;
-  const diff=Math.atan2(Math.sin(p.a-this.motionA),Math.cos(p.a-this.motionA));this.motionA+=diff*(1-Math.exp(-dt*(hand?2.8:8)));
+  const p=this.pos,hand=keys.has('Space');
+  advanceDrive(this,dt,keys,p.x>179);
   const ok=this.move(-Math.sin(this.motionA)*this.speed*dt,-Math.cos(this.motionA)*this.speed*dt,.95);
   if(!ok&&Math.abs(this.speed)>1.8){if(Math.abs(this.speed)>6)this.impactSerial++;this.shake=.8;this.speed*=-.22}
   this.syncCar();this.car.userData.shell.rotation.z=this.smoothSteer*Math.min(Math.abs(this.speed)*.003,.055);
@@ -282,14 +271,7 @@ export class Simulation{
  render(){
   const seat=this.inCar?this.carSpec.seatHeight:null;
   if(seat!=null){
-   if(!this.seatedDriver){
-    const driver=makePerson('rico'),rig=driver.userData;driver.scale.setScalar(.90);
-    for(const leg of rig.legs)leg.rotation.x=1.27;
-    for(const knee of rig.knees)knee.rotation.x=-1.37;
-    for(const arm of rig.arms)arm.rotation.x=.72;
-    for(const elbow of rig.elbows)elbow.rotation.x=.60;
-    this.seatedDriver=driver;
-   }
+   if(!this.seatedDriver)this.seatedDriver=seatedPerson();
    const shell=this.car.userData.shell;
    if(this.seatedDriver.parent!==shell){shell.add(this.seatedDriver);this.seatedDriver.position.set(-.34,seat-.74,.19)}
   }else if(this.seatedDriver?.parent)this.seatedDriver.removeFromParent();

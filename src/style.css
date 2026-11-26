@@ -63,3 +63,7 @@
 #shibaPads{display:none}@media(pointer:coarse){#shibaPads:not([hidden]){position:absolute;right:16px;bottom:87px;display:grid;grid-template-columns:repeat(2,46px);gap:4px}#shibaPads button{touch-action:none;min-height:39px;padding:4px}}
 @media(max-width:900px){#shibaMapBtn{width:150px;height:104px;bottom:15px;left:15px}.shiba-console{right:10px;top:10px}.shiba-console button{padding:7px 10px}.shiba-location{left:12px;top:13px}#shibaGauge{bottom:17px;right:13px}#shibaSpeed{font-size:41px}#shibaHelp{top:52px;bottom:auto}#shibaRegion{top:29%}}
 @media(max-width:540px){.shiba-location{top:65px}.shiba-console{left:9px;right:9px;justify-content:space-between}.shiba-console button{padding:7px 10px}#shibaHelp{top:102px;font-size:9px}#shibaMap{padding:14px}.footlinks{gap:2px}#shibaRegion{top:26%}}
+
+#shibaBlockEdge{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);padding:7px 14px;border-radius:6px;background:rgba(18,28,34,.88);color:#fff;font:600 13px system-ui;white-space:nowrap;pointer-events:none}
+#shibaLift{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);padding:9px 16px;border:1px solid #d0d7d0;border-radius:6px;background:#23372f;color:white;font-family:inherit;font-size:14px;font-weight:500;line-height:1.4;cursor:pointer}
+#shibaLift:disabled{color:#edf2ec;cursor:default}
