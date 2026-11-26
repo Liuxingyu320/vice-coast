@@ -306,6 +306,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
       metalness: 0.04,
       side: T.DoubleSide,
       alphaTest: 0.35,
+      polygonOffset: true, polygonOffsetFactor: -0.5, polygonOffsetUnits: -1,
     });
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.streetEvening = evening;
@@ -313,7 +314,7 @@ export async function furnishAvenue(scene, streets, ground, passable, fixtures) 
         'attribute vec3 chartCell;varying float signLight;\n' +
         sh.vertexShader.replace(
           '#include <uv_vertex>',
-          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.004)+uv*.992)/vec2(8.,8.);signLight=chartCell.z;',
+          '#include <uv_vertex>\nvMapUv=(chartCell.xy+vec2(.012)+uv*.976)/vec2(8.,8.);signLight=chartCell.z;',
         );
       sh.fragmentShader =
         'varying float signLight;uniform float streetEvening;\n' +

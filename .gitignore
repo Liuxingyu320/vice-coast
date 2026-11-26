@@ -10,5 +10,3 @@
 .env.*
 *.blend[0-9]
 __pycache__/
-
-/vendor/procedural-tokyo/node_modules/

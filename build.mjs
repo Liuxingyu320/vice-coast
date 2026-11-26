@@ -1,7 +1,7 @@
 import {rename,rm,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
-import {buildMap} from './art/procedural-shiba/bundle.mjs';
+import {buildMap} from './art/shiba-map/bundle.mjs';
 
 const {html}=await buildMap();
 const target=path.resolve(process.env.SHIBA_BUILD_STAGE || '.', 'index.html');

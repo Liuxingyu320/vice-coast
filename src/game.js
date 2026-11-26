@@ -1,4 +1,4 @@
-import {panoramaURL} from './shiba/procedural/route.js';
+import {panoramaURL} from './shiba/district/route.js';
 import {StreetRadio} from './street-radio.js';
 import {loadStudio} from './blender-assets.js';
 import {LedgerChapter} from './chapter.js';
